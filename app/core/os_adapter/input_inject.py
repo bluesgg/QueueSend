@@ -190,13 +190,10 @@ def set_clipboard_text(text: str) -> bool:
         to avoid COM initialization issues on Windows.
     """
     global _clipboard_result
-    
-    # #region agent log
-    import json; _log_data = {"location": "input_inject.py:set_clipboard_text", "message": "clipboard_call_start", "data": {"thread_name": _threading.current_thread().name, "thread_id": _threading.get_ident(), "text_len": len(text)}, "timestamp": int(__import__('time').time()*1000), "sessionId": "debug-session", "runId": "post-fix2"}; open(r"e:\projects\QueueSend\.cursor\debug.log", "a", encoding="utf-8").write(json.dumps(_log_data)+"\n")
-    # #endregion
+
     try:
         from PySide6.QtGui import QGuiApplication
-        from PySide6.QtCore import QThread, Qt
+        from PySide6.QtCore import QThread
 
         app = QGuiApplication.instance()
         if app is None:
@@ -206,54 +203,37 @@ def set_clipboard_text(text: str) -> bool:
         current_thread = QThread.currentThread()
         is_main = main_thread == current_thread
 
-        # #region agent log
-        import json; _log_data2 = {"location": "input_inject.py:set_clipboard_text", "message": "thread_check", "data": {"is_main_thread": is_main}, "timestamp": int(__import__('time').time()*1000), "sessionId": "debug-session", "runId": "post-fix2"}; open(r"e:\projects\QueueSend\.cursor\debug.log", "a", encoding="utf-8").write(json.dumps(_log_data2)+"\n")
-        # #endregion
-
         if is_main:
             # Already on main thread, set directly
             clipboard = QGuiApplication.clipboard()
             if clipboard is None:
                 return False
             clipboard.setText(text)
-            # #region agent log
-            import json; _log_data3 = {"location": "input_inject.py:set_clipboard_text", "message": "clipboard_set_direct", "data": {"success": True}, "timestamp": int(__import__('time').time()*1000), "sessionId": "debug-session", "runId": "post-fix2"}; open(r"e:\projects\QueueSend\.cursor\debug.log", "a", encoding="utf-8").write(json.dumps(_log_data3)+"\n")
-            # #endregion
             return True
         else:
             # Worker thread: use signal to marshal to main thread
             with _clipboard_lock:
                 _clipboard_event.clear()
                 _clipboard_result = False
-                
+
                 helper = _get_clipboard_helper()
                 if helper is None:
                     # Fallback: try direct access (may cause COM error on Windows)
-                    # #region agent log
-                    import json; _log_warn = {"location": "input_inject.py:set_clipboard_text", "message": "helper_not_init_fallback", "timestamp": int(__import__('time').time()*1000), "sessionId": "debug-session", "runId": "post-fix2"}; open(r"e:\projects\QueueSend\.cursor\debug.log", "a", encoding="utf-8").write(json.dumps(_log_warn)+"\n")
-                    # #endregion
                     clipboard = QGuiApplication.clipboard()
                     if clipboard:
                         clipboard.setText(text)
                         return True
                     return False
-                
-                # Emit signal with Qt.QueuedConnection (default for cross-thread)
+
+                # Emit signal - Qt will queue it to main thread
                 helper.set_text_signal.emit(text)
-                
+
                 # Wait for the slot to execute on main thread
                 success = _clipboard_event.wait(timeout=2.0)
-                
-                # #region agent log
-                import json; _log_data4 = {"location": "input_inject.py:set_clipboard_text", "message": "clipboard_set_via_signal", "data": {"success": _clipboard_result, "wait_ok": success}, "timestamp": int(__import__('time').time()*1000), "sessionId": "debug-session", "runId": "post-fix2"}; open(r"e:\projects\QueueSend\.cursor\debug.log", "a", encoding="utf-8").write(json.dumps(_log_data4)+"\n")
-                # #endregion
-                
+
                 return _clipboard_result if success else False
 
-    except Exception as e:
-        # #region agent log
-        import json; _log_err = {"location": "input_inject.py:set_clipboard_text", "message": "clipboard_error", "data": {"error": str(e), "error_type": type(e).__name__}, "timestamp": int(__import__('time').time()*1000), "sessionId": "debug-session", "runId": "post-fix2"}; open(r"e:\projects\QueueSend\.cursor\debug.log", "a", encoding="utf-8").write(json.dumps(_log_err)+"\n")
-        # #endregion
+    except Exception:
         return False
 
 

@@ -456,6 +456,8 @@ class AutomationEngine(QObject):
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
         self._thread.finished.connect(self._cleanup_thread)
+        # Tell thread to quit when worker finishes (FIX: thread must quit to emit finished signal)
+        self._worker.automation_finished.connect(self._thread.quit)
 
         # Start
         self._thread.start()
