@@ -74,6 +74,10 @@ def main() -> int:
     app.setApplicationVersion("1.1.0")
     app.setOrganizationName("QueueSend")
 
+    # Initialize clipboard helper on main thread (required for worker thread clipboard access)
+    from app.core.os_adapter.input_inject import init_clipboard_helper
+    init_clipboard_helper()
+
     # Check macOS requirements
     macos_ready, macos_error = check_macos_requirements()
 

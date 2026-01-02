@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
 from threading import Lock
-from typing import Callable, Optional
+from typing import Any, Callable, Optional, Union
 
 from .constants import LOG_BUFFER_SIZE
 
@@ -188,19 +188,19 @@ class Logger:
         self._buffer.add(entry)
         return entry
 
-    def debug(self, message: str, **kwargs: float | int | None) -> LogEntry:
+    def debug(self, message: str, **kwargs: Any) -> LogEntry:
         """Log a debug message."""
         return self._log(LogLevel.DEBUG, message, **kwargs)
 
-    def info(self, message: str, **kwargs: float | int | None) -> LogEntry:
+    def info(self, message: str, **kwargs: Any) -> LogEntry:
         """Log an info message."""
         return self._log(LogLevel.INFO, message, **kwargs)
 
-    def warning(self, message: str, **kwargs: float | int | None) -> LogEntry:
+    def warning(self, message: str, **kwargs: Any) -> LogEntry:
         """Log a warning message."""
         return self._log(LogLevel.WARNING, message, **kwargs)
 
-    def error(self, message: str, **kwargs: float | int | None) -> LogEntry:
+    def error(self, message: str, **kwargs: Any) -> LogEntry:
         """Log an error message."""
         return self._log(LogLevel.ERROR, message, **kwargs)
 
