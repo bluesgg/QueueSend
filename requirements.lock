@@ -1,0 +1,18 @@
+# This file is auto-generated from pyproject.toml
+# Install with: pip install -r requirements.lock
+
+# Core dependencies
+PySide6==6.6.1
+mss==9.0.1
+numpy==1.26.3
+pynput==1.7.6
+
+# macOS only (install separately on macOS)
+# pyobjc-framework-Quartz==10.1
+# pyobjc-framework-ApplicationServices==10.1
+
+# Development dependencies (optional)
+# pytest==7.4.4
+# ruff==0.1.11
+# mypy==1.8.0
+
