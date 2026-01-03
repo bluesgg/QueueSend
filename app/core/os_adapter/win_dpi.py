@@ -31,17 +31,9 @@ def setup_dpi_awareness() -> tuple[bool, str]:
         # Try the modern API first (Windows 10 1703+)
         user32 = ctypes.windll.user32
 
-        # DPI_AWARENESS_CONTEXT is a HANDLE type (pointer-sized integer)
-        # We must use c_void_p to pass the correct type to the API
-        DPI_AWARENESS_CONTEXT = ctypes.c_void_p
-        
-        # Set up proper argument types for the API call
-        user32.SetProcessDpiAwarenessContext.argtypes = [DPI_AWARENESS_CONTEXT]
-        user32.SetProcessDpiAwarenessContext.restype = ctypes.c_bool
-
         # SetProcessDpiAwarenessContext returns BOOL
         result = user32.SetProcessDpiAwarenessContext(
-            DPI_AWARENESS_CONTEXT(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
+            DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
         )
 
         if result:
