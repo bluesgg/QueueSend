@@ -34,32 +34,35 @@ def _log_debug(location: str, message: str, data: dict, hypothesis_id: str):
     except: pass
 # #endregion
 
-# Global mss instance to avoid GDI resource exhaustion from frequent create/destroy
-_mss_instance: Optional["mss.mss"] = None
+# Thread-local mss instance to avoid GDI resource exhaustion and thread-safety issues
+# mss uses thread-local storage for Windows GDI handles, so each thread needs its own instance
+import threading
+_thread_local = threading.local()
 
 def _get_mss() -> "mss.mss":
-    """Get or create the global mss instance.
+    """Get or create a thread-local mss instance.
     
-    Reusing the mss instance avoids GDI resource exhaustion that can occur
-    when rapidly creating and destroying mss contexts in DPI-aware processes.
+    mss uses thread-local storage for Windows GDI handles (srcdc, memdc, etc.).
+    If an mss instance is created on one thread and used on another, it will fail
+    with "'_thread._local' object has no attribute 'srcdc'".
+    
+    This function ensures each thread has its own mss instance.
     """
-    global _mss_instance
-    if _mss_instance is None:
-        _mss_instance = mss.mss()
+    if not hasattr(_thread_local, 'mss_instance') or _thread_local.mss_instance is None:
+        _thread_local.mss_instance = mss.mss()
         # #region agent log
-        _log_debug("capture.py:_get_mss", "Created new global mss instance", {"monitors_count": len(_mss_instance.monitors)}, "B")
+        _log_debug("capture.py:_get_mss", "Created new thread-local mss instance", {"monitors_count": len(_thread_local.mss_instance.monitors), "thread": threading.current_thread().name}, "B")
         # #endregion
-    return _mss_instance
+    return _thread_local.mss_instance
 
 def _reset_mss() -> None:
-    """Reset the global mss instance (call on error recovery)."""
-    global _mss_instance
-    if _mss_instance is not None:
+    """Reset the thread-local mss instance (call on error recovery)."""
+    if hasattr(_thread_local, 'mss_instance') and _thread_local.mss_instance is not None:
         try:
-            _mss_instance.close()
+            _thread_local.mss_instance.close()
         except Exception:
             pass
-        _mss_instance = None
+        _thread_local.mss_instance = None
 
 
 class CaptureError(Exception):
