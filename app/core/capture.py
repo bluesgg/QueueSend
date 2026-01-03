@@ -31,6 +31,8 @@ def _log_debug(location: str, message: str, data: dict, hypothesis_id: str):
         _os.makedirs(_os.path.dirname(_DEBUG_LOG_PATH), exist_ok=True)
         with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            f.flush()
+            _os.fsync(f.fileno())
     except: pass
 # #endregion
 
@@ -127,21 +129,23 @@ def capture_full_desktop(
     for attempt in range(retry_count):
         try:
             # #region agent log
-            if _capture_count <= 5:
-                _log_debug("capture.py:capture_full_desktop:before_grab", "About to grab", {"count": _capture_count, "attempt": attempt}, "B")
+            _log_debug("capture.py:capture_full_desktop:before_grab", "About to grab", {"count": _capture_count, "attempt": attempt, "thread": threading.current_thread().name}, "B")
             # #endregion
 
-            # Use global mss instance to avoid GDI resource exhaustion
+            # Use thread-local mss instance to avoid thread-safety issues
             sct = _get_mss()
 
             # Monitor 0 is the entire virtual desktop
             monitor = sct.monitors[0]
+            
+            # #region agent log
+            _log_debug("capture.py:capture_full_desktop:before_sct_grab", "Calling sct.grab", {"count": _capture_count, "monitor": monitor}, "B")
+            # #endregion
 
             screenshot = sct.grab(monitor)
 
             # #region agent log
-            if _capture_count <= 5:
-                _log_debug("capture.py:capture_full_desktop:after_grab", "sct.grab completed", {"count": _capture_count}, "B")
+            _log_debug("capture.py:capture_full_desktop:after_grab", "sct.grab completed", {"count": _capture_count, "size": screenshot.size}, "B")
             # #endregion
 
             # Convert to numpy array (BGRA format)

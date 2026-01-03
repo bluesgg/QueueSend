@@ -26,6 +26,8 @@ def _log_debug(location: str, message: str, data: dict, hypothesis_id: str):
         _os.makedirs(_os.path.dirname(_DEBUG_LOG_PATH), exist_ok=True)
         with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            f.flush()
+            _os.fsync(f.fileno())
     except: pass
 # #endregion
 

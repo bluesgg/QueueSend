@@ -12,6 +12,7 @@ import threading
 import time
 import json
 import os as _os
+import traceback
 from datetime import datetime
 from typing import Callable, Optional
 
@@ -27,6 +28,8 @@ def _log_debug(location: str, message: str, data: dict, hypothesis_id: str):
         _os.makedirs(_os.path.dirname(_DEBUG_LOG_PATH), exist_ok=True)
         with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            f.flush()
+            _os.fsync(f.fileno())
     except: pass
 # #endregion
 from .constants import (
@@ -144,15 +147,30 @@ class AutomationWorker(QObject):
 
         This is called in the worker thread.
         """
+        # #region agent log
+        _log_debug("engine.py:run:entry", "Worker run() starting", {"thread": threading.current_thread().name}, "D")
+        # #endregion
         try:
             self._run_automation()
+            # #region agent log
+            _log_debug("engine.py:run:completed", "Worker run() completed normally", {}, "D")
+            # #endregion
         except CaptureError as e:
+            # #region agent log
+            _log_debug("engine.py:run:capture_error", "CaptureError caught", {"error": str(e)}, "D")
+            # #endregion
             self._logger.error(f"截图失败: {e}")
             self.capture_failed.emit()
         except Exception as e:
+            # #region agent log
+            _log_debug("engine.py:run:exception", "Exception caught", {"error": str(e), "type": type(e).__name__, "traceback": traceback.format_exc()}, "D")
+            # #endregion
             self._logger.error(f"自动化错误: {e}")
             self.error_occurred.emit(str(e))
         finally:
+            # #region agent log
+            _log_debug("engine.py:run:finally", "Worker run() finally block", {}, "D")
+            # #endregion
             self._set_state(State.Idle)
             self.automation_finished.emit()
 
