@@ -5,7 +5,6 @@ See TDD Section 5 and Executable Spec Section 2.2 for requirements.
 """
 
 import time
-import json
 from dataclasses import dataclass
 from typing import Optional
 
@@ -20,16 +19,6 @@ from .constants import (
     GRAY_WEIGHT_R,
 )
 from .model import ROI, Rect, VirtualDesktopInfo
-
-# #region agent log
-_DEBUG_LOG_PATH = r"e:\projects\QueueSend\.cursor\debug.log"
-def _log_debug(location: str, message: str, data: dict, hypothesis_id: str):
-    entry = {"location": location, "message": message, "data": data, "timestamp": int(time.time()*1000), "sessionId": "debug-session", "hypothesisId": hypothesis_id}
-    try:
-        with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-    except: pass
-# #endregion
 
 
 class CaptureError(Exception):
@@ -68,8 +57,6 @@ def get_virtual_desktop_info_from_mss() -> VirtualDesktopInfo:
         )
 
 
-_mss_logged = False  # Only log once per session
-
 def capture_full_desktop(
     retry_count: int = CAPTURE_RETRY_N,
     retry_interval_ms: int = CAPTURE_RETRY_INTERVAL_MS,
@@ -89,7 +76,6 @@ def capture_full_desktop(
     Raises:
         CaptureError: If capture fails after all retries
     """
-    global _mss_logged
     last_error: Optional[Exception] = None
 
     for attempt in range(retry_count):
@@ -109,17 +95,6 @@ def capture_full_desktop(
                     width=monitor["width"],
                     height=monitor["height"],
                 )
-
-                # #region agent log
-                if not _mss_logged:
-                    _mss_logged = True
-                    all_monitors = [{"idx": i, "left": m["left"], "top": m["top"], "width": m["width"], "height": m["height"]} for i, m in enumerate(sct.monitors)]
-                    _log_debug("capture.py:capture_full_desktop", "mss virtual desktop info", {
-                        "monitor_0": {"left": monitor["left"], "top": monitor["top"], "width": monitor["width"], "height": monitor["height"]},
-                        "image_shape": list(image.shape),
-                        "all_monitors": all_monitors,
-                    }, "C")
-                # #endregion
 
                 return CaptureResult(image=image, desktop_info=desktop_info)
 
