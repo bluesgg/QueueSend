@@ -33,17 +33,10 @@ def get_virtual_desktop_info() -> "VirtualDesktopInfo":
     from ..model import VirtualDesktopInfo
 
     try:
-        import mss
-
-        with mss.mss() as sct:
-            # Monitor 0 is the "all monitors" virtual screen
-            all_monitors = sct.monitors[0]
-            return VirtualDesktopInfo(
-                left=all_monitors["left"],
-                top=all_monitors["top"],
-                width=all_monitors["width"],
-                height=all_monitors["height"],
-            )
+        # Use the global mss instance from capture module to avoid
+        # GDI resource exhaustion on Windows with DPI awareness
+        from ..capture import get_virtual_desktop_info_from_mss
+        return get_virtual_desktop_info_from_mss()
     except Exception:
         # Fallback to primary screen via Qt
         try:
@@ -105,11 +98,12 @@ def get_screen_count() -> int:
         pass
 
     try:
-        import mss
-
-        with mss.mss() as sct:
-            # monitors[0] is virtual desktop, rest are individual monitors
-            return len(sct.monitors) - 1
+        # Use the global mss instance from capture module to avoid
+        # GDI resource exhaustion on Windows with DPI awareness
+        from ..capture import _get_mss
+        sct = _get_mss()
+        # monitors[0] is virtual desktop, rest are individual monitors
+        return len(sct.monitors) - 1
     except Exception:
         pass
 

@@ -16,10 +16,12 @@ DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2: Final[int] = -4
 ERROR_ACCESS_DENIED: Final[int] = 5
 
 # #region agent log
-_DEBUG_LOG_PATH = r"e:\projects\QueueSend\.cursor\debug.log"
+import os as _os
+_DEBUG_LOG_PATH = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(__file__)))), ".cursor", "debug.log")
 def _log_debug(location: str, message: str, data: dict, hypothesis_id: str):
     entry = {"location": location, "message": message, "data": data, "timestamp": int(time.time()*1000), "sessionId": "debug-session", "hypothesisId": hypothesis_id}
     try:
+        _os.makedirs(_os.path.dirname(_DEBUG_LOG_PATH), exist_ok=True)
         with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except: pass
