@@ -10,12 +10,25 @@ See Executable Spec Sections 6, 9, 10 for requirements.
 
 import threading
 import time
+import json
+import os as _os
 from datetime import datetime
 from typing import Callable, Optional
 
 from PySide6.QtCore import QObject, QThread, Signal
 
 from .capture import CaptureError, capture_roi_gray
+
+# #region agent log
+_DEBUG_LOG_PATH = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(__file__))), ".cursor", "debug.log")
+def _log_debug(location: str, message: str, data: dict, hypothesis_id: str):
+    entry = {"location": location, "message": message, "data": data, "timestamp": int(time.time()*1000), "sessionId": "debug-session", "hypothesisId": hypothesis_id}
+    try:
+        _os.makedirs(_os.path.dirname(_DEBUG_LOG_PATH), exist_ok=True)
+        with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except: pass
+# #endregion
 from .constants import (
     HOLD_HITS_REQUIRED,
     SAMPLE_HZ,
@@ -145,6 +158,9 @@ class AutomationWorker(QObject):
 
     def _run_automation(self) -> None:
         """Main automation loop implementation."""
+        # #region agent log
+        _log_debug("engine.py:_run_automation:entry", "Automation loop starting", {}, "D")
+        # #endregion
         messages = self._messages
         n = len(messages)
         roi = self._config.roi
@@ -192,18 +208,36 @@ class AutomationWorker(QObject):
                 delta = (first_click_time - start_time).total_seconds()
                 self._logger.info(f"T1-T0 = {delta:.3f}秒")
 
+            # #region agent log
+            _log_debug("engine.py:before_click_input", "About to click input point", {"x": input_point.x, "y": input_point.y, "idx": idx}, "C")
+            # #endregion
             click_point(input_point)
+            # #region agent log
+            _log_debug("engine.py:after_click_input", "Click input point done", {"idx": idx}, "C")
+            # #endregion
             self._logger.debug(f"点击输入点: ({input_point.x}, {input_point.y})")
             time.sleep(0.1)  # Small delay after click
 
             # 2. Paste message
+            # #region agent log
+            _log_debug("engine.py:before_paste", "About to paste message", {"idx": idx, "msg_len": len(messages[idx])}, "E")
+            # #endregion
             if not paste_text(messages[idx]):
                 self._logger.warning("粘贴可能失败,继续执行")
+            # #region agent log
+            _log_debug("engine.py:after_paste", "Paste done", {"idx": idx}, "E")
+            # #endregion
             self._logger.debug("粘贴消息完成")
             time.sleep(0.1)  # Small delay after paste
 
             # 3. Click send button
+            # #region agent log
+            _log_debug("engine.py:before_click_send", "About to click send point", {"x": send_point.x, "y": send_point.y, "idx": idx}, "C")
+            # #endregion
             click_point(send_point)
+            # #region agent log
+            _log_debug("engine.py:after_click_send", "Click send point done", {"idx": idx}, "C")
+            # #endregion
             self._logger.debug(f"点击发送点: ({send_point.x}, {send_point.y})")
 
             # === Cooling phase (Spec 6.1 step 4) ===
@@ -215,7 +249,13 @@ class AutomationWorker(QObject):
             time.sleep(T_COOL_SEC)
 
             # === Capture reference frame (Spec 6.1 step 5) ===
+            # #region agent log
+            _log_debug("engine.py:before_capture_t0", "About to capture frame_t0", {"idx": idx}, "A")
+            # #endregion
             frame_t0 = capture_roi_gray(roi)
+            # #region agent log
+            _log_debug("engine.py:after_capture_t0", "Captured frame_t0", {"idx": idx, "shape": list(frame_t0.shape)}, "A")
+            # #endregion
             self._hold_hits = 0
             self._logger.info("采集frame_t0")
 

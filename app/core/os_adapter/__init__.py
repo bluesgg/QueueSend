@@ -8,12 +8,26 @@ This module provides cross-platform abstractions for:
 """
 
 import sys
+import time
+import json
+import os as _os
 from typing import TYPE_CHECKING
 
 # Platform detection
 IS_WINDOWS: bool = sys.platform == "win32"
 IS_MACOS: bool = sys.platform == "darwin"
 IS_LINUX: bool = sys.platform.startswith("linux")
+
+# #region agent log
+_DEBUG_LOG_PATH = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(__file__)))), ".cursor", "debug.log")
+def _log_debug(location: str, message: str, data: dict, hypothesis_id: str):
+    entry = {"location": location, "message": message, "data": data, "timestamp": int(time.time()*1000), "sessionId": "debug-session", "hypothesisId": hypothesis_id}
+    try:
+        _os.makedirs(_os.path.dirname(_DEBUG_LOG_PATH), exist_ok=True)
+        with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except: pass
+# #endregion
 
 if TYPE_CHECKING:
     from ..model import VirtualDesktopInfo
@@ -32,12 +46,22 @@ def get_virtual_desktop_info() -> "VirtualDesktopInfo":
     """
     from ..model import VirtualDesktopInfo
 
+    # #region agent log
+    _log_debug("os_adapter:get_virtual_desktop_info:entry", "Getting virtual desktop info", {}, "B")
+    # #endregion
     try:
         # Use the global mss instance from capture module to avoid
         # GDI resource exhaustion on Windows with DPI awareness
         from ..capture import get_virtual_desktop_info_from_mss
-        return get_virtual_desktop_info_from_mss()
-    except Exception:
+        result = get_virtual_desktop_info_from_mss()
+        # #region agent log
+        _log_debug("os_adapter:get_virtual_desktop_info:success", "Got desktop info from mss", {"left": result.left, "top": result.top, "width": result.width, "height": result.height}, "B")
+        # #endregion
+        return result
+    except Exception as e:
+        # #region agent log
+        _log_debug("os_adapter:get_virtual_desktop_info:mss_failed", "mss failed, trying Qt fallback", {"error": str(e)}, "B")
+        # #endregion
         # Fallback to primary screen via Qt
         try:
             from PySide6.QtWidgets import QApplication

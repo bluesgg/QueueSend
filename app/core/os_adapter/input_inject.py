@@ -7,6 +7,8 @@ See TDD Section 8 for requirements.
 """
 
 import time
+import json
+import os as _os
 from typing import Optional
 
 from pynput.keyboard import Controller as KeyboardController
@@ -16,6 +18,17 @@ from pynput.mouse import Controller as MouseController
 
 from ..model import Point
 from . import IS_MACOS, IS_WINDOWS
+
+# #region agent log
+_DEBUG_LOG_PATH = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(__file__)))), ".cursor", "debug.log")
+def _log_debug(location: str, message: str, data: dict, hypothesis_id: str):
+    entry = {"location": location, "message": message, "data": data, "timestamp": int(time.time()*1000), "sessionId": "debug-session", "hypothesisId": hypothesis_id}
+    try:
+        _os.makedirs(_os.path.dirname(_DEBUG_LOG_PATH), exist_ok=True)
+        with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except: pass
+# #endregion
 
 # Global controller instances (reused for efficiency)
 _mouse: Optional[MouseController] = None
@@ -50,16 +63,28 @@ def click_point(point: Point, button: Button = Button.left) -> None:
         Coordinates are in virtual desktop space (may include negative values
         on multi-monitor Windows setups).
     """
-    mouse = _get_mouse()
+    # #region agent log
+    _log_debug("input_inject:click_point:entry", "Click point called", {"x": point.x, "y": point.y}, "C")
+    # #endregion
+    try:
+        mouse = _get_mouse()
 
-    # Move to position
-    mouse.position = (point.x, point.y)
+        # Move to position
+        mouse.position = (point.x, point.y)
 
-    # Small delay to ensure position is set
-    time.sleep(0.01)
+        # Small delay to ensure position is set
+        time.sleep(0.01)
 
-    # Click
-    mouse.click(button, 1)
+        # Click
+        mouse.click(button, 1)
+        # #region agent log
+        _log_debug("input_inject:click_point:success", "Click completed", {"x": point.x, "y": point.y}, "C")
+        # #endregion
+    except Exception as e:
+        # #region agent log
+        _log_debug("input_inject:click_point:error", "Click failed", {"x": point.x, "y": point.y, "error": str(e), "type": type(e).__name__}, "C")
+        # #endregion
+        raise
 
 
 def double_click_point(point: Point) -> None:
@@ -254,15 +279,27 @@ def paste_text(text: str) -> bool:
         doesn't have focus or doesn't support paste. The automation relies
         on ROI change detection to verify success.
     """
+    # #region agent log
+    _log_debug("input_inject:paste_text:entry", "Paste text called", {"text_len": len(text)}, "E")
+    # #endregion
     # Set clipboard
     if not set_clipboard_text(text):
+        # #region agent log
+        _log_debug("input_inject:paste_text:clipboard_failed", "set_clipboard_text returned False", {}, "E")
+        # #endregion
         return False
 
+    # #region agent log
+    _log_debug("input_inject:paste_text:clipboard_set", "Clipboard set successfully", {}, "E")
+    # #endregion
     # Small delay to ensure clipboard is ready
     time.sleep(0.02)
 
     # Send paste shortcut
     paste_from_clipboard()
+    # #region agent log
+    _log_debug("input_inject:paste_text:done", "Paste shortcut sent", {}, "E")
+    # #endregion
 
     return True
 
