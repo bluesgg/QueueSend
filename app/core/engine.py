@@ -8,6 +8,7 @@ Implements the core automation logic including:
 See Executable Spec Sections 6, 9, 10 for requirements.
 """
 
+import gc
 import threading
 import time
 import json
@@ -341,6 +342,10 @@ class AutomationWorker(QObject):
                 # #region agent log
                 _log_debug("engine.py:after_sampling_emit", "Sampling emit done", {"idx": idx}, "I")
                 # #endregion
+
+                # Explicitly clean up frame_t to help GC (memory leak prevention)
+                del frame_t
+                gc.collect()
 
                 # Check if passed (Spec 6.1 step 7)
                 if self._hold_hits >= HOLD_HITS_REQUIRED:

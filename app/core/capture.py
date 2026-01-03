@@ -195,6 +195,18 @@ def to_grayscale(image: np.ndarray) -> np.ndarray:
     return gray
 
 
+# Module-level reusable mss instance to avoid repeated creation/destruction
+_mss_instance: Optional[mss.mss] = None
+_mss_lock = __import__('threading').Lock()
+
+def _get_mss() -> mss.mss:
+    """Get or create a reusable mss instance."""
+    global _mss_instance
+    with _mss_lock:
+        if _mss_instance is None:
+            _mss_instance = mss.mss()
+        return _mss_instance
+
 def capture_roi_gray(
     roi: ROI,
     retry_count: int = CAPTURE_RETRY_N,
@@ -203,7 +215,8 @@ def capture_roi_gray(
     """Capture and crop ROI, returning grayscale image.
 
     Optimized to capture only the ROI region directly instead of
-    capturing the full desktop and cropping.
+    capturing the full desktop and cropping. Uses a reusable mss instance
+    to avoid memory leaks from repeated instance creation.
 
     Args:
         roi: Region of interest to capture
@@ -225,32 +238,36 @@ def capture_roi_gray(
 
     for attempt in range(retry_count):
         try:
-            with mss.mss() as sct:
-                # Capture only the ROI region directly (huge memory savings!)
-                monitor = {
-                    "left": rect.x,
-                    "top": rect.y,
-                    "width": rect.w,
-                    "height": rect.h,
-                }
-                screenshot = sct.grab(monitor)
-                image = np.array(screenshot)
+            sct = _get_mss()
+            # Capture only the ROI region directly (huge memory savings!)
+            monitor = {
+                "left": rect.x,
+                "top": rect.y,
+                "width": rect.w,
+                "height": rect.h,
+            }
+            screenshot = sct.grab(monitor)
+            # Convert to numpy array immediately and release screenshot
+            image = np.asarray(screenshot)
+            
+            # #region agent log
+            _log_debug("capture:capture_roi_gray:grabbed", "ROI grabbed", {"shape": list(image.shape), "attempt": attempt}, "K")
+            # #endregion
 
-                # #region agent log
-                _log_debug("capture:capture_roi_gray:grabbed", "ROI grabbed", {"shape": list(image.shape), "attempt": attempt}, "K")
-                # #endregion
+            gray = to_grayscale(image)
 
-                gray = to_grayscale(image)
+            # Explicitly clean up references
+            del image
+            del screenshot
+            
+            # Force garbage collection periodically to prevent memory buildup
+            gc.collect()
 
-                # Explicitly clean up to help GC
-                del image
-                del screenshot
+            # #region agent log
+            _log_debug("capture:capture_roi_gray:success", "ROI capture done", {"gray_shape": list(gray.shape)}, "K")
+            # #endregion
 
-                # #region agent log
-                _log_debug("capture:capture_roi_gray:success", "ROI capture done", {"gray_shape": list(gray.shape)}, "K")
-                # #endregion
-
-                return gray
+            return gray
 
         except Exception as e:
             last_error = e
