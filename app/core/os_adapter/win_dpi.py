@@ -7,23 +7,11 @@ See Executable Spec Section 2.3 for requirements.
 """
 
 import ctypes
-import json
 from typing import Final
 
 # Windows API constants
 DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2: Final[int] = -4
 ERROR_ACCESS_DENIED: Final[int] = 5
-
-# #region agent log
-_DEBUG_LOG_PATH = r"e:\projects\QueueSend\.cursor\debug.log"
-def _log_debug(location: str, message: str, data: dict):
-    import time
-    entry = {"location": location, "message": message, "data": data, "timestamp": int(time.time()*1000)}
-    try:
-        with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-    except: pass
-# #endregion
 
 
 def setup_dpi_awareness() -> tuple[bool, str]:
@@ -39,9 +27,6 @@ def setup_dpi_awareness() -> tuple[bool, str]:
     The warning message (if any) should be displayed in the UI as
     a dismissible yellow banner per Spec Section 2.3.
     """
-    # #region agent log
-    _log_debug("win_dpi.py:setup_dpi_awareness:entry", "Function entry", {})
-    # #endregion
     try:
         # Try the modern API first (Windows 10 1703+)
         user32 = ctypes.windll.user32
@@ -58,10 +43,6 @@ def setup_dpi_awareness() -> tuple[bool, str]:
         result = user32.SetProcessDpiAwarenessContext(
             DPI_AWARENESS_CONTEXT(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
         )
-
-        # #region agent log
-        _log_debug("win_dpi.py:setup_dpi_awareness:api_result", "API call completed", {"result": result})
-        # #endregion
 
         if result:
             # Success
@@ -82,10 +63,7 @@ def setup_dpi_awareness() -> tuple[bool, str]:
             "建议在100%缩放下运行或重启应用"
         )
 
-    except AttributeError as e:
-        # #region agent log
-        _log_debug("win_dpi.py:setup_dpi_awareness:attr_error", "AttributeError - API not available", {"error": str(e)})
-        # #endregion
+    except AttributeError:
         # API not available (older Windows or non-Windows)
         try:
             # Fallback to older API (Windows 8.1+)
@@ -98,9 +76,6 @@ def setup_dpi_awareness() -> tuple[bool, str]:
             )
 
     except Exception as e:
-        # #region agent log
-        _log_debug("win_dpi.py:setup_dpi_awareness:exception", "Unexpected exception", {"error": str(e), "type": type(e).__name__})
-        # #endregion
         return False, f"⚠️ DPI设置异常: {e}"
 
 
