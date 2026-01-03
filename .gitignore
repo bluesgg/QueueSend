@@ -78,7 +78,7 @@ ehthumbs.db
 Desktop.ini
 
 # Project specific
-*.log
+# *.log
 logs/
 config.json
 

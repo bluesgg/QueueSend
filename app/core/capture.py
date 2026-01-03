@@ -5,6 +5,7 @@ See TDD Section 5 and Executable Spec Section 2.2 for requirements.
 """
 
 import time
+import json
 from dataclasses import dataclass
 from typing import Optional
 
@@ -19,6 +20,44 @@ from .constants import (
     GRAY_WEIGHT_R,
 )
 from .model import ROI, Rect, VirtualDesktopInfo
+
+# #region agent log
+_DEBUG_LOG_PATH = r"e:\projects\QueueSend\.cursor\debug.log"
+_capture_count = 0
+def _log_debug(location: str, message: str, data: dict, hypothesis_id: str):
+    entry = {"location": location, "message": message, "data": data, "timestamp": int(time.time()*1000), "sessionId": "debug-session", "hypothesisId": hypothesis_id}
+    try:
+        with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except: pass
+# #endregion
+
+# Global mss instance to avoid GDI resource exhaustion from frequent create/destroy
+_mss_instance: Optional["mss.mss"] = None
+
+def _get_mss() -> "mss.mss":
+    """Get or create the global mss instance.
+    
+    Reusing the mss instance avoids GDI resource exhaustion that can occur
+    when rapidly creating and destroying mss contexts in DPI-aware processes.
+    """
+    global _mss_instance
+    if _mss_instance is None:
+        _mss_instance = mss.mss()
+        # #region agent log
+        _log_debug("capture.py:_get_mss", "Created new global mss instance", {"monitors_count": len(_mss_instance.monitors)}, "B")
+        # #endregion
+    return _mss_instance
+
+def _reset_mss() -> None:
+    """Reset the global mss instance (call on error recovery)."""
+    global _mss_instance
+    if _mss_instance is not None:
+        try:
+            _mss_instance.close()
+        except Exception:
+            pass
+        _mss_instance = None
 
 
 class CaptureError(Exception):
@@ -46,15 +85,15 @@ def get_virtual_desktop_info_from_mss() -> VirtualDesktopInfo:
     Returns:
         VirtualDesktopInfo with bounds of the entire virtual desktop.
     """
-    with mss.mss() as sct:
-        # Monitor 0 is the "all monitors" virtual screen
-        all_monitors = sct.monitors[0]
-        return VirtualDesktopInfo(
-            left=all_monitors["left"],
-            top=all_monitors["top"],
-            width=all_monitors["width"],
-            height=all_monitors["height"],
-        )
+    sct = _get_mss()
+    # Monitor 0 is the "all monitors" virtual screen
+    all_monitors = sct.monitors[0]
+    return VirtualDesktopInfo(
+        left=all_monitors["left"],
+        top=all_monitors["top"],
+        width=all_monitors["width"],
+        height=all_monitors["height"],
+    )
 
 
 def capture_full_desktop(
@@ -76,30 +115,55 @@ def capture_full_desktop(
     Raises:
         CaptureError: If capture fails after all retries
     """
+    global _capture_count
+    _capture_count += 1
     last_error: Optional[Exception] = None
 
     for attempt in range(retry_count):
         try:
-            with mss.mss() as sct:
-                # Monitor 0 is the entire virtual desktop
-                monitor = sct.monitors[0]
-                screenshot = sct.grab(monitor)
+            # #region agent log
+            if _capture_count <= 5:
+                _log_debug("capture.py:capture_full_desktop:before_grab", "About to grab", {"count": _capture_count, "attempt": attempt}, "B")
+            # #endregion
 
-                # Convert to numpy array (BGRA format)
-                # Shape: (height, width, 4)
-                image = np.array(screenshot)
+            # Use global mss instance to avoid GDI resource exhaustion
+            sct = _get_mss()
 
-                desktop_info = VirtualDesktopInfo(
-                    left=monitor["left"],
-                    top=monitor["top"],
-                    width=monitor["width"],
-                    height=monitor["height"],
-                )
+            # Monitor 0 is the entire virtual desktop
+            monitor = sct.monitors[0]
 
-                return CaptureResult(image=image, desktop_info=desktop_info)
+            screenshot = sct.grab(monitor)
+
+            # #region agent log
+            if _capture_count <= 5:
+                _log_debug("capture.py:capture_full_desktop:after_grab", "sct.grab completed", {"count": _capture_count}, "B")
+            # #endregion
+
+            # Convert to numpy array (BGRA format)
+            # Shape: (height, width, 4)
+            image = np.array(screenshot)
+
+            # #region agent log
+            if _capture_count <= 5:
+                _log_debug("capture.py:capture_full_desktop:converted", "Converted to numpy", {"count": _capture_count, "shape": list(image.shape)}, "B")
+            # #endregion
+
+            desktop_info = VirtualDesktopInfo(
+                left=monitor["left"],
+                top=monitor["top"],
+                width=monitor["width"],
+                height=monitor["height"],
+            )
+
+            return CaptureResult(image=image, desktop_info=desktop_info)
 
         except Exception as e:
+            # #region agent log
+            _log_debug("capture.py:capture_full_desktop:exception", "Capture failed with exception", {"count": _capture_count, "error": str(e), "type": type(e).__name__, "attempt": attempt}, "B")
+            # #endregion
             last_error = e
+            # Reset mss instance on error - it may be in a bad state
+            _reset_mss()
             if attempt < retry_count - 1:
                 time.sleep(retry_interval_ms / 1000.0)
 
@@ -138,8 +202,26 @@ def crop_roi(
     x1 = x0 + rect.w
     y1 = y0 + rect.h
 
+    # #region agent log
+    if _capture_count <= 3:
+        _log_debug("capture.py:crop_roi", "Cropping ROI", {
+            "roi_rect": {"x": rect.x, "y": rect.y, "w": rect.w, "h": rect.h},
+            "desktop": {"left": desktop_info.left, "top": desktop_info.top, "width": desktop_info.width, "height": desktop_info.height},
+            "array_indices": {"x0": x0, "y0": y0, "x1": x1, "y1": y1},
+            "image_shape": list(full_image.shape),
+        }, "C,D")
+    # #endregion
+
     # Validate bounds
     if x0 < 0 or y0 < 0 or x1 > full_image.shape[1] or y1 > full_image.shape[0]:
+        # #region agent log
+        _log_debug("capture.py:crop_roi:bounds_error", "ROI out of bounds", {
+            "roi_rect": {"x": rect.x, "y": rect.y, "w": rect.w, "h": rect.h},
+            "desktop": {"left": desktop_info.left, "top": desktop_info.top, "width": desktop_info.width, "height": desktop_info.height},
+            "array_indices": {"x0": x0, "y0": y0, "x1": x1, "y1": y1},
+            "image_shape": list(full_image.shape),
+        }, "C,D")
+        # #endregion
         raise ValueError(
             f"ROI ({rect.x}, {rect.y}, {rect.w}x{rect.h}) 超出截图范围 "
             f"({desktop_info.left}, {desktop_info.top}, "
