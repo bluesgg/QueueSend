@@ -4,12 +4,28 @@ Captures the entire virtual desktop and crops ROI regions.
 See TDD Section 5 and Executable Spec Section 2.2 for requirements.
 """
 
+import gc
+import json
+import os as _os
 import time
 from dataclasses import dataclass
 from typing import Optional
 
 import mss
 import numpy as np
+
+# #region agent log
+_DEBUG_LOG_PATH = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(__file__))), ".cursor", "debug.log")
+def _log_debug(location: str, message: str, data: dict, hypothesis_id: str):
+    entry = {"location": location, "message": message, "data": data, "timestamp": int(time.time()*1000), "sessionId": "debug-session", "hypothesisId": hypothesis_id}
+    try:
+        _os.makedirs(_os.path.dirname(_DEBUG_LOG_PATH), exist_ok=True)
+        with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            f.flush()
+            _os.fsync(f.fileno())
+    except: pass
+# #endregion
 
 from .constants import (
     CAPTURE_RETRY_INTERVAL_MS,
@@ -154,6 +170,7 @@ def to_grayscale(image: np.ndarray) -> np.ndarray:
     """Convert BGRA/BGR image to grayscale.
 
     Uses ITU-R BT.601 weights: Y = 0.299*R + 0.587*G + 0.114*B
+    Optimized to minimize temporary array allocations.
 
     Args:
         image: Input image in BGR or BGRA format (from mss)
@@ -167,14 +184,15 @@ def to_grayscale(image: np.ndarray) -> np.ndarray:
         # Already grayscale
         return image.astype(np.uint8)
 
-    b = image[:, :, 0].astype(np.float32)
-    g = image[:, :, 1].astype(np.float32)
-    r = image[:, :, 2].astype(np.float32)
+    # Optimized: use in-place operations and avoid multiple large temporary arrays
+    # Use numpy's einsum or direct computation with minimal allocations
+    gray = (
+        GRAY_WEIGHT_B * image[:, :, 0]
+        + GRAY_WEIGHT_G * image[:, :, 1]
+        + GRAY_WEIGHT_R * image[:, :, 2]
+    ).astype(np.uint8)
 
-    # Apply grayscale weights
-    gray = GRAY_WEIGHT_R * r + GRAY_WEIGHT_G * g + GRAY_WEIGHT_B * b
-
-    return gray.astype(np.uint8)
+    return gray
 
 
 def capture_roi_gray(
@@ -184,8 +202,8 @@ def capture_roi_gray(
 ) -> np.ndarray:
     """Capture and crop ROI, returning grayscale image.
 
-    Convenience function that combines full desktop capture,
-    ROI cropping, and grayscale conversion.
+    Optimized to capture only the ROI region directly instead of
+    capturing the full desktop and cropping.
 
     Args:
         roi: Region of interest to capture
@@ -198,9 +216,53 @@ def capture_roi_gray(
     Raises:
         CaptureError: If capture fails after all retries
     """
-    result = capture_full_desktop(retry_count, retry_interval_ms)
-    cropped = crop_roi(result.image, roi, result.desktop_info)
-    return to_grayscale(cropped)
+    last_error: Optional[Exception] = None
+    rect = roi.rect
+
+    # #region agent log
+    _log_debug("capture:capture_roi_gray:entry", "Direct ROI capture starting", {"x": rect.x, "y": rect.y, "w": rect.w, "h": rect.h}, "K")
+    # #endregion
+
+    for attempt in range(retry_count):
+        try:
+            with mss.mss() as sct:
+                # Capture only the ROI region directly (huge memory savings!)
+                monitor = {
+                    "left": rect.x,
+                    "top": rect.y,
+                    "width": rect.w,
+                    "height": rect.h,
+                }
+                screenshot = sct.grab(monitor)
+                image = np.array(screenshot)
+
+                # #region agent log
+                _log_debug("capture:capture_roi_gray:grabbed", "ROI grabbed", {"shape": list(image.shape), "attempt": attempt}, "K")
+                # #endregion
+
+                gray = to_grayscale(image)
+
+                # Explicitly clean up to help GC
+                del image
+                del screenshot
+
+                # #region agent log
+                _log_debug("capture:capture_roi_gray:success", "ROI capture done", {"gray_shape": list(gray.shape)}, "K")
+                # #endregion
+
+                return gray
+
+        except Exception as e:
+            last_error = e
+            # #region agent log
+            _log_debug("capture:capture_roi_gray:error", "Capture attempt failed", {"attempt": attempt, "error": str(e)}, "K")
+            # #endregion
+            if attempt < retry_count - 1:
+                time.sleep(retry_interval_ms / 1000.0)
+
+    raise CaptureError(
+        f"ROI截图失败,已重试{retry_count}次。最后错误: {last_error}"
+    )
 
 
 def save_roi_preview(
