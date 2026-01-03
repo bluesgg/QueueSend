@@ -493,3 +493,4 @@ class TestCtrl004NoChangeResume:
         np.testing.assert_array_equal(calc.frame_t0, original_frame)
         assert calc.hold_hits == 1
 
+

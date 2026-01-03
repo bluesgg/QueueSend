@@ -364,3 +364,4 @@ class DiffCalculator:
         self._frame_t0 = state.get("frame_t0")
         self._tracker._hold_hits = state.get("hold_hits", 0)
 
+

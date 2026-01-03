@@ -60,3 +60,4 @@ GRAY_WEIGHT_R: Final[float] = 0.299
 GRAY_WEIGHT_G: Final[float] = 0.587
 GRAY_WEIGHT_B: Final[float] = 0.114
 
+

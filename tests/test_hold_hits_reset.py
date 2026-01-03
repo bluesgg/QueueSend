@@ -264,3 +264,4 @@ class TestHoldHitsScenarios:
         tracker.update(0.020001, threshold)
         assert tracker.hold_hits == 2
 
+

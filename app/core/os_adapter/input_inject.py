@@ -7,6 +7,7 @@ See TDD Section 8 for requirements.
 """
 
 import time
+import json
 from typing import Optional
 
 from pynput.keyboard import Controller as KeyboardController
@@ -16,6 +17,16 @@ from pynput.mouse import Controller as MouseController
 
 from ..model import Point
 from . import IS_MACOS, IS_WINDOWS
+
+# #region agent log
+_DEBUG_LOG_PATH = r"e:\projects\QueueSend\.cursor\debug.log"
+def _log_debug(location: str, message: str, data: dict, hypothesis_id: str):
+    entry = {"location": location, "message": message, "data": data, "timestamp": int(time.time()*1000), "sessionId": "debug-session", "hypothesisId": hypothesis_id}
+    try:
+        with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except: pass
+# #endregion
 
 # Global controller instances (reused for efficiency)
 _mouse: Optional[MouseController] = None
@@ -52,11 +63,28 @@ def click_point(point: Point, button: Button = Button.left) -> None:
     """
     mouse = _get_mouse()
 
+    # #region agent log
+    pos_before = mouse.position
+    _log_debug("input_inject.py:click_point:before", "Mouse position before move", {
+        "requested_x": point.x, "requested_y": point.y,
+        "current_pos_x": pos_before[0], "current_pos_y": pos_before[1],
+    }, "D")
+    # #endregion
+
     # Move to position
     mouse.position = (point.x, point.y)
 
     # Small delay to ensure position is set
     time.sleep(0.01)
+
+    # #region agent log
+    pos_after = mouse.position
+    _log_debug("input_inject.py:click_point:after", "Mouse position after move", {
+        "requested_x": point.x, "requested_y": point.y,
+        "actual_pos_x": pos_after[0], "actual_pos_y": pos_after[1],
+        "delta_x": pos_after[0] - point.x, "delta_y": pos_after[1] - point.y,
+    }, "D")
+    # #endregion
 
     # Click
     mouse.click(button, 1)

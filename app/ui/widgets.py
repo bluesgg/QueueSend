@@ -311,3 +311,4 @@ class ThresholdInput(QWidget):
         else:
             self._calibrate_btn.setStyleSheet("")
 
+

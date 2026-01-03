@@ -141,3 +141,4 @@ class TestDiffWithROI:
 
         assert diff_with_roi == pytest.approx(diff_no_roi, abs=0.0001)
 
+

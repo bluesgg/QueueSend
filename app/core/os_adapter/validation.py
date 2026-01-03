@@ -196,3 +196,4 @@ def check_macos_display_limit() -> ValidationResult:
 
     return ValidationResult.success()
 
+

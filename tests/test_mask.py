@@ -215,3 +215,4 @@ class TestMaskEdgeCases:
         assert mask[25, 0] is np.False_
         assert mask[25, 199] is np.False_
 
+

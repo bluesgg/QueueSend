@@ -248,3 +248,4 @@ class TestCircleROIEdgeCases:
         # Right touch point: (w, cy)
         assert circle.contains_point(100.0, circle.cy)
 
+

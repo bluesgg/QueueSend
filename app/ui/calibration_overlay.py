@@ -10,6 +10,7 @@ See Executable Spec Section 4 for requirements.
 
 from enum import Enum, auto
 from typing import Optional
+import json
 
 from PySide6.QtCore import QPoint, QRect, Qt, Signal
 from PySide6.QtGui import (
@@ -24,6 +25,17 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QApplication, QWidget
 
 from app.core.model import Circle, Point, Rect, ROI, ROIShape
+
+# #region agent log
+_DEBUG_LOG_PATH = r"e:\projects\QueueSend\.cursor\debug.log"
+def _log_debug(location: str, message: str, data: dict, hypothesis_id: str):
+    import time
+    entry = {"location": location, "message": message, "data": data, "timestamp": int(time.time()*1000), "sessionId": "debug-session", "hypothesisId": hypothesis_id}
+    try:
+        with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except: pass
+# #endregion
 
 
 class CalibrationMode(Enum):
@@ -111,6 +123,16 @@ class CalibrationOverlay(QWidget):
         """Show overlay covering all screens."""
         # Get virtual desktop geometry
         desktop = QApplication.primaryScreen().virtualGeometry()
+        # #region agent log
+        primary_screen = QApplication.primaryScreen()
+        _log_debug("calibration_overlay.py:_show_fullscreen", "Qt virtual desktop geometry", {
+            "virtual_desktop": {"x": desktop.x(), "y": desktop.y(), "w": desktop.width(), "h": desktop.height()},
+            "primary_screen_geometry": {"x": primary_screen.geometry().x(), "y": primary_screen.geometry().y(), "w": primary_screen.geometry().width(), "h": primary_screen.geometry().height()},
+            "device_pixel_ratio": primary_screen.devicePixelRatio(),
+            "logical_dpi": primary_screen.logicalDotsPerInch(),
+            "physical_dpi": primary_screen.physicalDotsPerInch(),
+        }, "B,E")
+        # #endregion
         self.setGeometry(desktop)
         self.show()
         self.raise_()
@@ -292,11 +314,25 @@ class CalibrationOverlay(QWidget):
                 self._drag_current = event.pos()
             elif self._mode == CalibrationMode.INPUT_POINT:
                 global_pos = event.globalPos()
+                # #region agent log
+                _log_debug("calibration_overlay.py:mousePressEvent:INPUT_POINT", "Input point selected via Qt globalPos", {
+                    "global_pos_x": global_pos.x(), "global_pos_y": global_pos.y(),
+                    "local_pos_x": event.pos().x(), "local_pos_y": event.pos().y(),
+                    "widget_geometry_x": self.geometry().x(), "widget_geometry_y": self.geometry().y(),
+                }, "B,E")
+                # #endregion
                 self._input_point = Point(global_pos.x(), global_pos.y())
                 self.input_point_selected.emit(self._input_point)
                 self.hide()
             elif self._mode == CalibrationMode.SEND_POINT:
                 global_pos = event.globalPos()
+                # #region agent log
+                _log_debug("calibration_overlay.py:mousePressEvent:SEND_POINT", "Send point selected via Qt globalPos", {
+                    "global_pos_x": global_pos.x(), "global_pos_y": global_pos.y(),
+                    "local_pos_x": event.pos().x(), "local_pos_y": event.pos().y(),
+                    "widget_geometry_x": self.geometry().x(), "widget_geometry_y": self.geometry().y(),
+                }, "B,E")
+                # #endregion
                 self._send_point = Point(global_pos.x(), global_pos.y())
                 self.send_point_selected.emit(self._send_point)
                 self.hide()
@@ -378,4 +414,5 @@ class CalibrationOverlay(QWidget):
     def send_point(self) -> Optional[Point]:
         """Get the selected send point."""
         return self._send_point
+
 

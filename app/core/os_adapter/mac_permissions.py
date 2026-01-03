@@ -136,3 +136,4 @@ def request_accessibility_permission() -> bool:
     except Exception:
         return False
 
+

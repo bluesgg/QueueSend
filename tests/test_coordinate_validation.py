@@ -378,3 +378,4 @@ class TestMultiMonitorScenarios:
         result = validate_calibration_config(config, desktop)
         assert result.valid is True
 
+

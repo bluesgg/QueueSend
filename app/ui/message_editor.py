@@ -294,3 +294,4 @@ class MessageEditor(QWidget):
         """
         return self.get_messages() != snapshot
 
+

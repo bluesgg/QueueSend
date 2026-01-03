@@ -269,3 +269,4 @@ class CalibrationStats:
     di_values: list[float]
     warning: Optional[str] = None
 
+
