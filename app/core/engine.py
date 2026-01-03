@@ -275,12 +275,30 @@ class AutomationWorker(QObject):
             _log_debug("engine.py:after_capture_t0", "Captured frame_t0", {"idx": idx, "shape": list(frame_t0.shape)}, "A")
             # #endregion
             self._hold_hits = 0
+            # #region agent log
+            _log_debug("engine.py:before_logger_info_frame_t0", "About to log frame_t0", {"idx": idx}, "J")
+            # #endregion
             self._logger.info("采集frame_t0")
+            # #region agent log
+            _log_debug("engine.py:after_logger_info_frame_t0", "Logger info done", {"idx": idx}, "J")
+            # #endregion
 
             # === WaitingHold phase (Spec 6.1 steps 6-8) ===
+            # #region agent log
+            _log_debug("engine.py:before_set_state_waitinghold", "About to set state WaitingHold", {"idx": idx}, "F")
+            # #endregion
             self._set_state(State.WaitingHold)
+            # #region agent log
+            _log_debug("engine.py:after_set_state_waitinghold", "State WaitingHold set", {"idx": idx}, "F")
+            # #endregion
 
+            # #region agent log
+            _log_debug("engine.py:entering_while_loop", "Entering while True loop", {"idx": idx}, "G")
+            # #endregion
             while True:
+                # #region agent log
+                _log_debug("engine.py:while_loop_iteration", "While loop iteration start", {"idx": idx, "hold_hits": self._hold_hits}, "G")
+                # #endregion
                 if self._stop_event.is_set():
                     self._logger.info("用户停止")
                     return
@@ -293,8 +311,20 @@ class AutomationWorker(QObject):
                         return  # Messages changed or stopped
 
                 # Sample at SAMPLE_HZ (Spec 6.1 step 6)
+                # #region agent log
+                _log_debug("engine.py:before_capture_frame_t", "About to capture frame_t in loop", {"idx": idx}, "G")
+                # #endregion
                 frame_t = capture_roi_gray(roi)
+                # #region agent log
+                _log_debug("engine.py:after_capture_frame_t", "Captured frame_t", {"idx": idx, "shape": list(frame_t.shape)}, "G")
+                # #endregion
+                # #region agent log
+                _log_debug("engine.py:before_calculate_diff", "About to calculate diff", {"idx": idx}, "H")
+                # #endregion
                 diff = calculate_diff(frame_t, frame_t0, roi)
+                # #region agent log
+                _log_debug("engine.py:after_calculate_diff", "Diff calculated", {"idx": idx, "diff": float(diff)}, "H")
+                # #endregion
 
                 # Hold hits logic (Spec 7.2)
                 if diff >= self._th_hold:
@@ -303,8 +333,14 @@ class AutomationWorker(QObject):
                     self._hold_hits = 0  # Reset on miss
 
                 # Log and emit (Spec 12)
+                # #region agent log
+                _log_debug("engine.py:before_sampling_emit", "About to emit sampling_update", {"idx": idx, "diff": float(diff), "hold_hits": self._hold_hits}, "I")
+                # #endregion
                 self._logger.sampling(diff, self._hold_hits)
                 self.sampling_update.emit(diff, self._hold_hits)
+                # #region agent log
+                _log_debug("engine.py:after_sampling_emit", "Sampling emit done", {"idx": idx}, "I")
+                # #endregion
 
                 # Check if passed (Spec 6.1 step 7)
                 if self._hold_hits >= HOLD_HITS_REQUIRED:
