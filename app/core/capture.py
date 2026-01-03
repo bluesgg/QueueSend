@@ -41,6 +41,9 @@ def _log_debug(location: str, message: str, data: dict, hypothesis_id: str):
 import threading
 _thread_local = threading.local()
 
+# Counter to track mss usage and recreate periodically to prevent GDI handle corruption
+_mss_use_count = threading.local()
+
 def _get_mss() -> "mss.mss":
     """Get or create a thread-local mss instance.
     
@@ -49,12 +52,34 @@ def _get_mss() -> "mss.mss":
     with "'_thread._local' object has no attribute 'srcdc'".
     
     This function ensures each thread has its own mss instance.
+    
+    WORKAROUND: Due to potential GDI handle corruption issues on Windows,
+    we now create a fresh mss instance for each capture operation.
+    This is less efficient but more stable.
     """
-    if not hasattr(_thread_local, 'mss_instance') or _thread_local.mss_instance is None:
-        _thread_local.mss_instance = mss.mss()
-        # #region agent log
-        _log_debug("capture.py:_get_mss", "Created new thread-local mss instance", {"monitors_count": len(_thread_local.mss_instance.monitors), "thread": threading.current_thread().name}, "B")
-        # #endregion
+    # Initialize use counter for diagnostics
+    if not hasattr(_mss_use_count, 'count'):
+        _mss_use_count.count = 0
+    _mss_use_count.count += 1
+    
+    # #region agent log
+    _log_debug("capture.py:_get_mss:entry", "Creating fresh mss instance for stability", {"use_count": _mss_use_count.count, "thread": threading.current_thread().name}, "F")
+    # #endregion
+    
+    # Close any existing instance first
+    if hasattr(_thread_local, 'mss_instance') and _thread_local.mss_instance is not None:
+        try:
+            _thread_local.mss_instance.close()
+        except Exception:
+            pass
+        _thread_local.mss_instance = None
+    
+    # Create fresh instance for each capture
+    _thread_local.mss_instance = mss.mss()
+    # #region agent log
+    _log_debug("capture.py:_get_mss:created", "Created fresh mss instance", {"monitors_count": len(_thread_local.mss_instance.monitors), "thread": threading.current_thread().name, "use_count": _mss_use_count.count}, "B")
+    # #endregion
+    
     return _thread_local.mss_instance
 
 def _reset_mss() -> None:
@@ -134,6 +159,10 @@ def capture_full_desktop(
 
             # Use thread-local mss instance to avoid thread-safety issues
             sct = _get_mss()
+            
+            # #region agent log
+            _log_debug("capture.py:capture_full_desktop:got_mss", "Got mss instance", {"count": _capture_count, "monitors_len": len(sct.monitors)}, "F")
+            # #endregion
 
             # Monitor 0 is the entire virtual desktop
             monitor = sct.monitors[0]

@@ -52,10 +52,17 @@ def get_virtual_desktop_info() -> "VirtualDesktopInfo":
     _log_debug("os_adapter:get_virtual_desktop_info:entry", "Getting virtual desktop info", {}, "B")
     # #endregion
     try:
-        # Use the global mss instance from capture module to avoid
-        # GDI resource exhaustion on Windows with DPI awareness
-        from ..capture import get_virtual_desktop_info_from_mss
-        result = get_virtual_desktop_info_from_mss()
+        # Use a fresh mss instance for this one-time init call
+        # This avoids sharing instances between threads
+        import mss
+        with mss.mss() as sct:
+            all_monitors = sct.monitors[0]
+            result = VirtualDesktopInfo(
+                left=all_monitors["left"],
+                top=all_monitors["top"],
+                width=all_monitors["width"],
+                height=all_monitors["height"],
+            )
         # #region agent log
         _log_debug("os_adapter:get_virtual_desktop_info:success", "Got desktop info from mss", {"left": result.left, "top": result.top, "width": result.width, "height": result.height}, "B")
         # #endregion
@@ -124,12 +131,11 @@ def get_screen_count() -> int:
         pass
 
     try:
-        # Use the global mss instance from capture module to avoid
-        # GDI resource exhaustion on Windows with DPI awareness
-        from ..capture import _get_mss
-        sct = _get_mss()
-        # monitors[0] is virtual desktop, rest are individual monitors
-        return len(sct.monitors) - 1
+        # Use a fresh mss instance for this one-time call
+        import mss
+        with mss.mss() as sct:
+            # monitors[0] is virtual desktop, rest are individual monitors
+            return len(sct.monitors) - 1
     except Exception:
         pass
 
