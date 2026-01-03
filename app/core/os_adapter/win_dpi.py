@@ -7,27 +7,11 @@ See Executable Spec Section 2.3 for requirements.
 """
 
 import ctypes
-import json
-import time
 from typing import Final
 
 # Windows API constants
 DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2: Final[int] = -4
 ERROR_ACCESS_DENIED: Final[int] = 5
-
-# #region agent log
-import os as _os
-_DEBUG_LOG_PATH = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.dirname(__file__)))), ".cursor", "debug.log")
-def _log_debug(location: str, message: str, data: dict, hypothesis_id: str):
-    entry = {"location": location, "message": message, "data": data, "timestamp": int(time.time()*1000), "sessionId": "debug-session", "hypothesisId": hypothesis_id}
-    try:
-        _os.makedirs(_os.path.dirname(_DEBUG_LOG_PATH), exist_ok=True)
-        with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-            f.flush()
-            _os.fsync(f.fileno())
-    except: pass
-# #endregion
 
 
 def setup_dpi_awareness() -> tuple[bool, str]:
@@ -43,68 +27,39 @@ def setup_dpi_awareness() -> tuple[bool, str]:
     The warning message (if any) should be displayed in the UI as
     a dismissible yellow banner per Spec Section 2.3.
     """
-    # #region agent log
-    _log_debug("win_dpi.py:setup_dpi_awareness:entry", "Function entry", {}, "A")
-    # #endregion
-
-    # NOTE: We use SetProcessDpiAwareness (shcore) instead of 
-    # SetProcessDpiAwarenessContext (user32) because the latter causes
-    # crashes in mss.grab() when using Per-Monitor Aware V2 mode.
-    # The shcore API is compatible with mss and still provides proper
-    # DPI awareness for coordinate handling.
-
     try:
-        # Use shcore.SetProcessDpiAwareness (Windows 8.1+)
-        # WORKAROUND: Using PROCESS_SYSTEM_DPI_AWARE (1) instead of
-        # PROCESS_PER_MONITOR_DPI_AWARE (2) because level 2 causes crashes
-        # in mss.grab() due to GDI handle corruption issues.
-        # Level 1 still provides proper coordinate handling for most cases.
-        shcore = ctypes.windll.shcore
-        
-        # #region agent log
-        _log_debug("win_dpi.py:setup_dpi_awareness:using_shcore", "Using SetProcessDpiAwareness API with SYSTEM_DPI_AWARE (1) for mss compatibility", {}, "I")
-        # #endregion
-        
-        result = shcore.SetProcessDpiAwareness(1)  # PROCESS_SYSTEM_DPI_AWARE (compatible with mss)
-        
-        # #region agent log
-        _log_debug("win_dpi.py:setup_dpi_awareness:shcore_result", "SetProcessDpiAwareness result", {"result": result, "level": 1}, "I")
-        # #endregion
-        
-        # result is HRESULT: S_OK (0) = success, E_ACCESSDENIED = already set
-        if result == 0:
+        # Try the modern API first (Windows 10 1703+)
+        user32 = ctypes.windll.user32
+
+        # SetProcessDpiAwarenessContext returns BOOL
+        result = user32.SetProcessDpiAwarenessContext(
+            DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+        )
+
+        if result:
+            # Success
             return True, ""
-        elif result == -2147024891:  # E_ACCESSDENIED (0x80070005)
+
+        # Check why it failed
+        error_code = ctypes.windll.kernel32.GetLastError()
+
+        if error_code == ERROR_ACCESS_DENIED:
             # Already set - this is fine
-            # #region agent log
-            _log_debug("win_dpi.py:setup_dpi_awareness:already_set", "DPI already set (E_ACCESSDENIED)", {}, "A")
-            # #endregion
+            # This happens when manifest sets DPI awareness or
+            # when called multiple times
             return True, ""
-        else:
-            # Check with GetLastError for more info
-            error_code = ctypes.windll.kernel32.GetLastError()
-            # #region agent log
-            _log_debug("win_dpi.py:setup_dpi_awareness:shcore_error", "SetProcessDpiAwareness returned non-zero", {"result": result, "error_code": error_code}, "A")
-            # #endregion
-            
-            if error_code == ERROR_ACCESS_DENIED:
-                return True, ""
-            
-            return False, (
-                "⚠️ DPI感知设置失败,坐标可能偏移。"
-                "建议在100%缩放下运行或重启应用"
-            )
-            
+
+        # Actual failure
+        return False, (
+            "⚠️ DPI感知设置失败,坐标可能偏移。"
+            "建议在100%缩放下运行或重启应用"
+        )
+
     except AttributeError:
-        # shcore.SetProcessDpiAwareness not available (Windows 7)
-        # #region agent log
-        _log_debug("win_dpi.py:setup_dpi_awareness:no_shcore", "shcore API not available, trying user32", {}, "A")
-        # #endregion
+        # API not available (older Windows or non-Windows)
         try:
-            # Fallback to user32.SetProcessDPIAware (Windows Vista+)
-            # This only sets system DPI awareness, not per-monitor
-            user32 = ctypes.windll.user32
-            user32.SetProcessDPIAware()
+            # Fallback to older API (Windows 8.1+)
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)  # PROCESS_PER_MONITOR_DPI_AWARE
             return True, ""
         except Exception:
             return False, (
@@ -113,9 +68,6 @@ def setup_dpi_awareness() -> tuple[bool, str]:
             )
 
     except Exception as e:
-        # #region agent log
-        _log_debug("win_dpi.py:setup_dpi_awareness:exception", "Unexpected exception", {"error": str(e), "type": type(e).__name__}, "A")
-        # #endregion
         return False, f"⚠️ DPI设置异常: {e}"
 
 
