@@ -8,9 +8,7 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
@@ -82,6 +80,5 @@ Desktop.ini
 *.log
 logs/
 config.json
-.cursor/
 
 
