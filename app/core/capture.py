@@ -154,44 +154,51 @@ def capture_full_desktop(
     for attempt in range(retry_count):
         try:
             # #region agent log
-            _log_debug("capture.py:capture_full_desktop:before_grab", "About to grab", {"count": _capture_count, "attempt": attempt, "thread": threading.current_thread().name}, "B")
+            _log_debug("capture.py:capture_full_desktop:before_grab", "About to grab using context manager", {"count": _capture_count, "attempt": attempt, "thread": threading.current_thread().name}, "H")
             # #endregion
 
-            # Use thread-local mss instance to avoid thread-safety issues
-            sct = _get_mss()
-            
-            # #region agent log
-            _log_debug("capture.py:capture_full_desktop:got_mss", "Got mss instance", {"count": _capture_count, "monitors_len": len(sct.monitors)}, "F")
-            # #endregion
+            # Use context manager - this is the official recommended way to use mss
+            # It ensures proper cleanup of GDI resources after each capture
+            with mss.mss() as sct:
+                # #region agent log
+                _log_debug("capture.py:capture_full_desktop:mss_context_entered", "Entered mss context", {"count": _capture_count, "monitors_len": len(sct.monitors)}, "H")
+                # #endregion
 
-            # Monitor 0 is the entire virtual desktop
-            monitor = sct.monitors[0]
-            
-            # #region agent log
-            _log_debug("capture.py:capture_full_desktop:before_sct_grab", "Calling sct.grab", {"count": _capture_count, "monitor": monitor}, "B")
-            # #endregion
+                # Monitor 0 is the entire virtual desktop
+                monitor = sct.monitors[0]
+                
+                # #region agent log
+                _log_debug("capture.py:capture_full_desktop:before_sct_grab", "Calling sct.grab", {"count": _capture_count, "monitor": monitor}, "B")
+                # #endregion
 
-            screenshot = sct.grab(monitor)
+                screenshot = sct.grab(monitor)
 
-            # #region agent log
-            _log_debug("capture.py:capture_full_desktop:after_grab", "sct.grab completed", {"count": _capture_count, "size": screenshot.size}, "B")
-            # #endregion
+                # #region agent log
+                _log_debug("capture.py:capture_full_desktop:after_grab", "sct.grab completed", {"count": _capture_count, "size": screenshot.size}, "B")
+                # #endregion
 
-            # Convert to numpy array (BGRA format)
-            # Shape: (height, width, 4)
-            image = np.array(screenshot)
+                # IMPORTANT: Convert to numpy array INSIDE the context manager
+                # The screenshot data may become invalid after the context exits
+                image = np.array(screenshot)
 
-            # #region agent log
-            if _capture_count <= 5:
+                # #region agent log
                 _log_debug("capture.py:capture_full_desktop:converted", "Converted to numpy", {"count": _capture_count, "shape": list(image.shape)}, "B")
-            # #endregion
+                # #endregion
 
-            desktop_info = VirtualDesktopInfo(
-                left=monitor["left"],
-                top=monitor["top"],
-                width=monitor["width"],
-                height=monitor["height"],
-            )
+                desktop_info = VirtualDesktopInfo(
+                    left=monitor["left"],
+                    top=monitor["top"],
+                    width=monitor["width"],
+                    height=monitor["height"],
+                )
+
+                # #region agent log
+                _log_debug("capture.py:capture_full_desktop:before_return", "About to return from context", {"count": _capture_count}, "H")
+                # #endregion
+
+            # #region agent log
+            _log_debug("capture.py:capture_full_desktop:context_exited", "mss context exited, returning result", {"count": _capture_count}, "H")
+            # #endregion
 
             return CaptureResult(image=image, desktop_info=desktop_info)
 
@@ -200,8 +207,6 @@ def capture_full_desktop(
             _log_debug("capture.py:capture_full_desktop:exception", "Capture failed with exception", {"count": _capture_count, "error": str(e), "type": type(e).__name__, "attempt": attempt}, "B")
             # #endregion
             last_error = e
-            # Reset mss instance on error - it may be in a bad state
-            _reset_mss()
             if attempt < retry_count - 1:
                 time.sleep(retry_interval_ms / 1000.0)
 

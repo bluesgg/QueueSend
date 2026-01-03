@@ -55,17 +55,20 @@ def setup_dpi_awareness() -> tuple[bool, str]:
 
     try:
         # Use shcore.SetProcessDpiAwareness (Windows 8.1+)
-        # PROCESS_PER_MONITOR_DPI_AWARE = 2
+        # WORKAROUND: Using PROCESS_SYSTEM_DPI_AWARE (1) instead of
+        # PROCESS_PER_MONITOR_DPI_AWARE (2) because level 2 causes crashes
+        # in mss.grab() due to GDI handle corruption issues.
+        # Level 1 still provides proper coordinate handling for most cases.
         shcore = ctypes.windll.shcore
         
         # #region agent log
-        _log_debug("win_dpi.py:setup_dpi_awareness:using_shcore", "Using SetProcessDpiAwareness API (compatible with mss)", {}, "A")
+        _log_debug("win_dpi.py:setup_dpi_awareness:using_shcore", "Using SetProcessDpiAwareness API with SYSTEM_DPI_AWARE (1) for mss compatibility", {}, "I")
         # #endregion
         
-        result = shcore.SetProcessDpiAwareness(2)  # PROCESS_PER_MONITOR_DPI_AWARE
+        result = shcore.SetProcessDpiAwareness(1)  # PROCESS_SYSTEM_DPI_AWARE (compatible with mss)
         
         # #region agent log
-        _log_debug("win_dpi.py:setup_dpi_awareness:shcore_result", "SetProcessDpiAwareness result", {"result": result}, "A")
+        _log_debug("win_dpi.py:setup_dpi_awareness:shcore_result", "SetProcessDpiAwareness result", {"result": result, "level": 1}, "I")
         # #endregion
         
         # result is HRESULT: S_OK (0) = success, E_ACCESSDENIED = already set
