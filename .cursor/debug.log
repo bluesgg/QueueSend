@@ -1,0 +1,45 @@
+{"location": "os_adapter:get_virtual_desktop_info:entry", "message": "Getting virtual desktop info", "data": {}, "timestamp": 1767481552755, "sessionId": "debug-session", "hypothesisId": "B"}
+{"location": "os_adapter:get_virtual_desktop_info:success", "message": "Got desktop info from mss", "data": {"left": 0, "top": 0, "width": 6400, "height": 2160}, "timestamp": 1767481552809, "sessionId": "debug-session", "hypothesisId": "B"}
+{"location": "engine.py:run:entry", "message": "Worker run() starting", "data": {"thread": "Dummy-1"}, "timestamp": 1767481552814, "sessionId": "debug-session", "hypothesisId": "D"}
+{"location": "engine.py:_run_automation:entry", "message": "Automation loop starting", "data": {}, "timestamp": 1767481552815, "sessionId": "debug-session", "hypothesisId": "D"}
+{"location": "engine.py:before_click_input", "message": "About to click input point", "data": {"x": 1046, "y": 1335, "idx": 0}, "timestamp": 1767481554830, "sessionId": "debug-session", "hypothesisId": "C"}
+{"location": "engine.py:after_click_input", "message": "Click input point done", "data": {"idx": 0}, "timestamp": 1767481554850, "sessionId": "debug-session", "hypothesisId": "C"}
+{"location": "engine.py:before_paste", "message": "About to paste message", "data": {"idx": 0, "msg_len": 1}, "timestamp": 1767481554953, "sessionId": "debug-session", "hypothesisId": "E"}
+{"location": "engine.py:after_paste", "message": "Paste done", "data": {"idx": 0}, "timestamp": 1767481555029, "sessionId": "debug-session", "hypothesisId": "E"}
+{"location": "engine.py:before_click_send", "message": "About to click send point", "data": {"x": 1886, "y": 1330, "idx": 0}, "timestamp": 1767481555131, "sessionId": "debug-session", "hypothesisId": "C"}
+{"location": "engine.py:after_click_send", "message": "Click send point done", "data": {"idx": 0}, "timestamp": 1767481555149, "sessionId": "debug-session", "hypothesisId": "C"}
+{"location": "engine.py:before_capture_t0", "message": "About to capture frame_t0", "data": {"idx": 0}, "timestamp": 1767481556151, "sessionId": "debug-session", "hypothesisId": "A"}
+{"location": "engine.py:after_capture_t0", "message": "Captured frame_t0", "data": {"idx": 0, "shape": [49, 51]}, "timestamp": 1767481556292, "sessionId": "debug-session", "hypothesisId": "A"}
+{"location": "engine.py:before_logger_info_frame_t0", "message": "About to log frame_t0", "data": {"idx": 0}, "timestamp": 1767481556293, "sessionId": "debug-session", "hypothesisId": "J"}
+{"location": "engine.py:after_logger_info_frame_t0", "message": "Logger info done", "data": {"idx": 0}, "timestamp": 1767481556293, "sessionId": "debug-session", "hypothesisId": "J"}
+{"location": "engine.py:before_set_state_waitinghold", "message": "About to set state WaitingHold", "data": {"idx": 0}, "timestamp": 1767481556295, "sessionId": "debug-session", "hypothesisId": "F"}
+{"location": "engine.py:after_set_state_waitinghold", "message": "State WaitingHold set", "data": {"idx": 0}, "timestamp": 1767481556296, "sessionId": "debug-session", "hypothesisId": "F"}
+{"location": "engine.py:entering_while_loop", "message": "Entering while True loop", "data": {"idx": 0}, "timestamp": 1767481556297, "sessionId": "debug-session", "hypothesisId": "G"}
+{"location": "engine.py:while_loop_iteration", "message": "While loop iteration start", "data": {"idx": 0, "hold_hits": 0}, "timestamp": 1767481556298, "sessionId": "debug-session", "hypothesisId": "G"}
+{"location": "engine.py:before_capture_frame_t", "message": "About to capture frame_t in loop", "data": {"idx": 0}, "timestamp": 1767481556298, "sessionId": "debug-session", "hypothesisId": "G"}
+{"location": "engine.py:after_capture_frame_t", "message": "Captured frame_t", "data": {"idx": 0, "shape": [49, 51]}, "timestamp": 1767481556427, "sessionId": "debug-session", "hypothesisId": "G"}
+{"location": "engine.py:before_calculate_diff", "message": "About to calculate diff", "data": {"idx": 0}, "timestamp": 1767481556429, "sessionId": "debug-session", "hypothesisId": "H"}
+{"location": "engine.py:after_calculate_diff", "message": "Diff calculated", "data": {"idx": 0, "diff": 0.0}, "timestamp": 1767481556430, "sessionId": "debug-session", "hypothesisId": "H"}
+{"location": "engine.py:before_sampling_emit", "message": "About to emit sampling_update", "data": {"idx": 0, "diff": 0.0, "hold_hits": 0}, "timestamp": 1767481556431, "sessionId": "debug-session", "hypothesisId": "I"}
+{"location": "engine.py:after_sampling_emit", "message": "Sampling emit done", "data": {"idx": 0}, "timestamp": 1767481556433, "sessionId": "debug-session", "hypothesisId": "I"}
+{"location": "engine.py:while_loop_iteration", "message": "While loop iteration start", "data": {"idx": 0, "hold_hits": 0}, "timestamp": 1767481557434, "sessionId": "debug-session", "hypothesisId": "G"}
+{"location": "engine.py:before_capture_frame_t", "message": "About to capture frame_t in loop", "data": {"idx": 0}, "timestamp": 1767481557434, "sessionId": "debug-session", "hypothesisId": "G"}
+{"location": "engine.py:after_capture_frame_t", "message": "Captured frame_t", "data": {"idx": 0, "shape": [49, 51]}, "timestamp": 1767481557559, "sessionId": "debug-session", "hypothesisId": "G"}
+{"location": "engine.py:before_calculate_diff", "message": "About to calculate diff", "data": {"idx": 0}, "timestamp": 1767481557562, "sessionId": "debug-session", "hypothesisId": "H"}
+{"location": "engine.py:after_calculate_diff", "message": "Diff calculated", "data": {"idx": 0, "diff": 0.38311167604296625}, "timestamp": 1767481557562, "sessionId": "debug-session", "hypothesisId": "H"}
+{"location": "engine.py:before_sampling_emit", "message": "About to emit sampling_update", "data": {"idx": 0, "diff": 0.38311167604296625, "hold_hits": 1}, "timestamp": 1767481557563, "sessionId": "debug-session", "hypothesisId": "I"}
+{"location": "os_adapter:get_virtual_desktop_info:entry", "message": "Getting virtual desktop info", "data": {}, "timestamp": 1767481621697, "sessionId": "debug-session", "hypothesisId": "B"}
+{"location": "os_adapter:get_virtual_desktop_info:success", "message": "Got desktop info from mss", "data": {"left": 0, "top": 0, "width": 6400, "height": 2160}, "timestamp": 1767481621732, "sessionId": "debug-session", "hypothesisId": "B"}
+{"location": "engine.py:run:entry", "message": "Worker run() starting", "data": {"thread": "Dummy-1"}, "timestamp": 1767481621735, "sessionId": "debug-session", "hypothesisId": "D"}
+{"location": "engine.py:_run_automation:entry", "message": "Automation loop starting", "data": {}, "timestamp": 1767481621735, "sessionId": "debug-session", "hypothesisId": "D"}
+{"location": "engine.py:before_click_input", "message": "About to click input point", "data": {"x": 1097, "y": 1333, "idx": 0}, "timestamp": 1767481623749, "sessionId": "debug-session", "hypothesisId": "C"}
+{"location": "engine.py:after_click_input", "message": "Click input point done", "data": {"idx": 0}, "timestamp": 1767481623769, "sessionId": "debug-session", "hypothesisId": "C"}
+{"location": "engine.py:before_paste", "message": "About to paste message", "data": {"idx": 0, "msg_len": 1}, "timestamp": 1767481623872, "sessionId": "debug-session", "hypothesisId": "E"}
+{"location": "engine.py:after_paste", "message": "Paste done", "data": {"idx": 0}, "timestamp": 1767481623947, "sessionId": "debug-session", "hypothesisId": "E"}
+{"location": "engine.py:before_click_send", "message": "About to click send point", "data": {"x": 1878, "y": 1328, "idx": 0}, "timestamp": 1767481624049, "sessionId": "debug-session", "hypothesisId": "C"}
+{"location": "engine.py:after_click_send", "message": "Click send point done", "data": {"idx": 0}, "timestamp": 1767481624065, "sessionId": "debug-session", "hypothesisId": "C"}
+{"location": "engine.py:before_capture_t0", "message": "About to capture frame_t0", "data": {"idx": 0}, "timestamp": 1767481625068, "sessionId": "debug-session", "hypothesisId": "A"}
+{"location": "engine.py:after_capture_t0", "message": "Captured frame_t0", "data": {"idx": 0, "shape": [60, 62]}, "timestamp": 1767481625202, "sessionId": "debug-session", "hypothesisId": "A"}
+{"location": "engine.py:before_logger_info_frame_t0", "message": "About to log frame_t0", "data": {"idx": 0}, "timestamp": 1767481625203, "sessionId": "debug-session", "hypothesisId": "J"}
+{"location": "engine.py:after_logger_info_frame_t0", "message": "Logger info done", "data": {"idx": 0}, "timestamp": 1767481625205, "sessionId": "debug-session", "hypothesisId": "J"}
+{"location": "engine.py:before_set_state_waitinghold", "message": "About to set state WaitingHold", "data": {"idx": 0}, "timestamp": 1767481625206, "sessionId": "debug-session", "hypothesisId": "F"}
