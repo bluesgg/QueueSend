@@ -4,8 +4,11 @@ Provides a logging interface for the automation engine that:
 - Uses a circular buffer (max 200 entries) to prevent memory growth
 - Is thread-safe for worker thread -> UI thread communication
 - Formats log entries with timestamps and context
+- Writes debug logs to debug.log file
 """
 
+import os
+import traceback
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -132,6 +135,107 @@ class LogBuffer:
             return len(self._buffer)
 
 
+class FileLogger:
+    """File logger for writing debug information to debug.log."""
+    
+    def __init__(self, log_path: Optional[str] = None) -> None:
+        """Initialize file logger.
+        
+        Args:
+            log_path: Path to debug log file. If None, uses debug.log in project root.
+        """
+        if log_path is None:
+            # Get project root (3 levels up from this file: core -> app -> project)
+            current_file = os.path.abspath(__file__)
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_file)))
+            log_path = os.path.join(project_root, "debug.log")
+        
+        self._log_path = log_path
+        self._lock = Lock()
+        self._enabled = True
+    
+    def enable(self) -> None:
+        """Enable file logging."""
+        self._enabled = True
+    
+    def disable(self) -> None:
+        """Disable file logging."""
+        self._enabled = False
+    
+    def write(self, level: str, message: str, **context: Any) -> None:
+        """Write a log entry to the file.
+        
+        Args:
+            level: Log level (DEBUG, INFO, WARNING, ERROR)
+            message: Log message
+            **context: Additional context data
+        """
+        if not self._enabled:
+            return
+        
+        try:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            
+            # Build log entry
+            parts = [f"[{timestamp}]", f"[{level}]", message]
+            
+            # Add context information
+            if context:
+                context_str = ", ".join(f"{k}={v}" for k, v in context.items())
+                parts.append(f"({context_str})")
+            
+            log_line = " ".join(parts) + "\n"
+            
+            # Thread-safe file write
+            with self._lock:
+                with open(self._log_path, "a", encoding="utf-8") as f:
+                    f.write(log_line)
+                    f.flush()
+        except Exception:
+            # Silently fail to avoid breaking the main program
+            pass
+    
+    def write_exception(self, message: str, exc: Exception) -> None:
+        """Write exception information to the log.
+        
+        Args:
+            message: Context message
+            exc: Exception to log
+        """
+        if not self._enabled:
+            return
+        
+        try:
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            exc_type = type(exc).__name__
+            exc_msg = str(exc)
+            exc_trace = traceback.format_exc()
+            
+            log_entry = (
+                f"[{timestamp}] [ERROR] {message}\n"
+                f"  Exception Type: {exc_type}\n"
+                f"  Exception Message: {exc_msg}\n"
+                f"  Traceback:\n{exc_trace}\n"
+            )
+            
+            with self._lock:
+                with open(self._log_path, "a", encoding="utf-8") as f:
+                    f.write(log_entry)
+                    f.flush()
+        except Exception:
+            pass
+    
+    def clear(self) -> None:
+        """Clear the log file."""
+        try:
+            with self._lock:
+                with open(self._log_path, "w", encoding="utf-8") as f:
+                    f.write(f"=== Debug Log Started at {datetime.now().isoformat()} ===\n")
+                    f.flush()
+        except Exception:
+            pass
+
+
 class Logger:
     """Main logging interface for the automation engine.
 
@@ -139,9 +243,10 @@ class Logger:
     with optional context (state, progress, diff, hold_hits).
     """
 
-    def __init__(self, buffer: Optional[LogBuffer] = None) -> None:
-        """Initialize logger with optional existing buffer."""
+    def __init__(self, buffer: Optional[LogBuffer] = None, file_logger: Optional[FileLogger] = None) -> None:
+        """Initialize logger with optional existing buffer and file logger."""
         self._buffer = buffer or LogBuffer()
+        self._file_logger = file_logger or FileLogger()
         self._current_state: Optional[str] = None
         self._current_progress: Optional[tuple[int, int]] = None
 
@@ -149,6 +254,11 @@ class Logger:
     def buffer(self) -> LogBuffer:
         """Access the underlying log buffer."""
         return self._buffer
+    
+    @property
+    def file_logger(self) -> FileLogger:
+        """Access the file logger."""
+        return self._file_logger
 
     def set_state(self, state: str) -> None:
         """Set the current state for subsequent log entries."""
@@ -174,6 +284,7 @@ class Logger:
         message: str,
         diff: Optional[float] = None,
         hold_hits: Optional[int] = None,
+        **extra_context: Any,
     ) -> LogEntry:
         """Internal logging method."""
         entry = LogEntry(
@@ -186,6 +297,21 @@ class Logger:
             hold_hits=hold_hits,
         )
         self._buffer.add(entry)
+        
+        # Also write to file for debugging
+        context = {}
+        if self._current_state:
+            context["state"] = self._current_state
+        if self._current_progress:
+            context["progress"] = f"{self._current_progress[0]}/{self._current_progress[1]}"
+        if diff is not None:
+            context["diff"] = f"{diff:.6f}"
+        if hold_hits is not None:
+            context["hold_hits"] = hold_hits
+        context.update(extra_context)
+        
+        self._file_logger.write(level.name, message, **context)
+        
         return entry
 
     def debug(self, message: str, **kwargs: Any) -> LogEntry:
@@ -203,6 +329,16 @@ class Logger:
     def error(self, message: str, **kwargs: Any) -> LogEntry:
         """Log an error message."""
         return self._log(LogLevel.ERROR, message, **kwargs)
+    
+    def exception(self, message: str, exc: Exception, **kwargs: Any) -> LogEntry:
+        """Log an exception with full traceback.
+        
+        Args:
+            message: Context message
+            exc: Exception to log
+        """
+        self._file_logger.write_exception(message, exc)
+        return self.error(f"{message}: {exc}", **kwargs)
 
     def state_change(self, old_state: str, new_state: str) -> LogEntry:
         """Log a state transition."""

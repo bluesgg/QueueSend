@@ -36,6 +36,16 @@ from .constants import (
 )
 from .model import ROI, Rect, VirtualDesktopInfo
 
+# Get logger for debug info
+from .logging import get_logger
+
+def _get_capture_logger():
+    """Get logger instance, lazy init to avoid circular imports."""
+    try:
+        return get_logger()
+    except:
+        return None
+
 
 class CaptureError(Exception):
     """Exception raised when screen capture fails after retries."""
@@ -231,13 +241,19 @@ def capture_roi_gray(
     """
     last_error: Optional[Exception] = None
     rect = roi.rect
+    logger = _get_capture_logger()
 
     # #region agent log
     _log_debug("capture:capture_roi_gray:entry", "Direct ROI capture starting", {"x": rect.x, "y": rect.y, "w": rect.w, "h": rect.h}, "K")
     # #endregion
+    if logger:
+        logger.debug(f"开始ROI截图", roi_rect=f"({rect.x},{rect.y},{rect.w}x{rect.h})")
 
     for attempt in range(retry_count):
         try:
+            if logger and attempt > 0:
+                logger.debug(f"重试截图 (尝试 {attempt+1}/{retry_count})")
+            
             sct = _get_mss()
             # Capture only the ROI region directly (huge memory savings!)
             monitor = {
@@ -253,6 +269,8 @@ def capture_roi_gray(
             # #region agent log
             _log_debug("capture:capture_roi_gray:grabbed", "ROI grabbed", {"shape": list(image.shape), "attempt": attempt}, "K")
             # #endregion
+            if logger:
+                logger.debug(f"截图成功", shape=f"{image.shape}", attempt=attempt)
 
             gray = to_grayscale(image)
 
@@ -266,6 +284,8 @@ def capture_roi_gray(
             # #region agent log
             _log_debug("capture:capture_roi_gray:success", "ROI capture done", {"gray_shape": list(gray.shape)}, "K")
             # #endregion
+            if logger:
+                logger.debug(f"灰度转换完成", gray_shape=f"{gray.shape}")
 
             return gray
 
@@ -274,12 +294,16 @@ def capture_roi_gray(
             # #region agent log
             _log_debug("capture:capture_roi_gray:error", "Capture attempt failed", {"attempt": attempt, "error": str(e)}, "K")
             # #endregion
+            if logger:
+                logger.warning(f"截图失败 (尝试 {attempt+1}/{retry_count})", error=str(e))
+            
             if attempt < retry_count - 1:
                 time.sleep(retry_interval_ms / 1000.0)
 
-    raise CaptureError(
-        f"ROI截图失败,已重试{retry_count}次。最后错误: {last_error}"
-    )
+    error_msg = f"ROI截图失败,已重试{retry_count}次。最后错误: {last_error}"
+    if logger:
+        logger.error(error_msg)
+    raise CaptureError(error_msg)
 
 
 def save_roi_preview(

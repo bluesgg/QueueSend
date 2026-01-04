@@ -151,27 +151,30 @@ class AutomationWorker(QObject):
         # #region agent log
         _log_debug("engine.py:run:entry", "Worker run() starting", {"thread": threading.current_thread().name}, "D")
         # #endregion
+        self._logger.debug("自动化工作线程启动", thread_name=threading.current_thread().name)
         try:
             self._run_automation()
             # #region agent log
             _log_debug("engine.py:run:completed", "Worker run() completed normally", {}, "D")
             # #endregion
+            self._logger.info("自动化流程正常完成")
         except CaptureError as e:
             # #region agent log
             _log_debug("engine.py:run:capture_error", "CaptureError caught", {"error": str(e)}, "D")
             # #endregion
-            self._logger.error(f"截图失败: {e}")
+            self._logger.exception("截图错误", e)
             self.capture_failed.emit()
         except Exception as e:
             # #region agent log
             _log_debug("engine.py:run:exception", "Exception caught", {"error": str(e), "type": type(e).__name__, "traceback": traceback.format_exc()}, "D")
             # #endregion
-            self._logger.error(f"自动化错误: {e}")
+            self._logger.exception("自动化异常", e)
             self.error_occurred.emit(str(e))
         finally:
             # #region agent log
             _log_debug("engine.py:run:finally", "Worker run() finally block", {}, "D")
             # #endregion
+            self._logger.debug("自动化工作线程结束")
             self._set_state(State.Idle)
             self.automation_finished.emit()
 
@@ -186,7 +189,11 @@ class AutomationWorker(QObject):
         input_point = self._config.input_point
         send_point = self._config.send_point
 
-        self._logger.info(f"开始自动化: {n}条消息")
+        self._logger.info(f"开始自动化: {n}条消息", 
+                         roi_rect=f"({roi.rect.x},{roi.rect.y},{roi.rect.w}x{roi.rect.h})",
+                         input_point=f"({input_point.x},{input_point.y})",
+                         send_point=f"({send_point.x},{send_point.y})",
+                         th_hold=f"{self._th_hold:.6f}")
 
         # Countdown phase (Spec 3.1)
         self._set_state(State.Countdown)
@@ -194,6 +201,7 @@ class AutomationWorker(QObject):
         self._logger.info(f"Start时间: {start_time.strftime('%H:%M:%S.%f')[:-3]}")
 
         if not self._countdown(T_COUNTDOWN_SEC):
+            self._logger.info("倒计时期间被停止")
             return  # Stopped during countdown
 
         # Process each message
@@ -208,6 +216,10 @@ class AutomationWorker(QObject):
             self.progress_updated.emit(idx + 1, n)
 
             # Log message content
+            msg_preview = messages[idx][:100] if len(messages[idx]) > 100 else messages[idx]
+            self._logger.info(f"开始处理消息 #{idx+1}", 
+                            message_length=len(messages[idx]),
+                            message_preview=msg_preview)
             self._logger.message_content(idx + 1, messages[idx])
             self.message_started.emit(idx + 1, messages[idx])
 
@@ -216,6 +228,7 @@ class AutomationWorker(QObject):
 
             # Check for pause/stop
             if self._handle_pause_stop():
+                self._logger.info("消息处理期间被停止")
                 return
 
             # 1. Click input point
@@ -230,56 +243,80 @@ class AutomationWorker(QObject):
             # #region agent log
             _log_debug("engine.py:before_click_input", "About to click input point", {"x": input_point.x, "y": input_point.y, "idx": idx}, "C")
             # #endregion
-            click_point(input_point)
+            self._logger.debug(f"点击输入点: ({input_point.x}, {input_point.y})", idx=idx)
+            try:
+                click_point(input_point)
+            except Exception as e:
+                self._logger.exception(f"点击输入点失败", e, idx=idx, point=f"({input_point.x},{input_point.y})")
+                raise
             # #region agent log
             _log_debug("engine.py:after_click_input", "Click input point done", {"idx": idx}, "C")
             # #endregion
-            self._logger.debug(f"点击输入点: ({input_point.x}, {input_point.y})")
+            self._logger.debug(f"点击输入点完成")
             time.sleep(0.1)  # Small delay after click
 
             # 2. Paste message
             # #region agent log
             _log_debug("engine.py:before_paste", "About to paste message", {"idx": idx, "msg_len": len(messages[idx])}, "E")
             # #endregion
-            if not paste_text(messages[idx]):
-                self._logger.warning("粘贴可能失败,继续执行")
+            self._logger.debug(f"准备粘贴消息", idx=idx, msg_len=len(messages[idx]))
+            try:
+                if not paste_text(messages[idx]):
+                    self._logger.warning("粘贴可能失败,继续执行", idx=idx)
+                else:
+                    self._logger.debug("粘贴成功")
+            except Exception as e:
+                self._logger.exception("粘贴异常", e, idx=idx)
+                raise
             # #region agent log
             _log_debug("engine.py:after_paste", "Paste done", {"idx": idx}, "E")
             # #endregion
-            self._logger.debug("粘贴消息完成")
             time.sleep(0.1)  # Small delay after paste
 
             # 3. Click send button
             # #region agent log
             _log_debug("engine.py:before_click_send", "About to click send point", {"x": send_point.x, "y": send_point.y, "idx": idx}, "C")
             # #endregion
-            click_point(send_point)
+            self._logger.debug(f"点击发送点: ({send_point.x}, {send_point.y})", idx=idx)
+            try:
+                click_point(send_point)
+            except Exception as e:
+                self._logger.exception("点击发送点失败", e, idx=idx, point=f"({send_point.x},{send_point.y})")
+                raise
             # #region agent log
             _log_debug("engine.py:after_click_send", "Click send point done", {"idx": idx}, "C")
             # #endregion
-            self._logger.debug(f"点击发送点: ({send_point.x}, {send_point.y})")
+            self._logger.debug("点击发送点完成")
 
             # === Cooling phase (Spec 6.1 step 4) ===
             self._set_state(State.Cooling)
 
             if self._handle_pause_stop():
+                self._logger.info("冷却期间被停止")
                 return
 
+            self._logger.debug(f"开始冷却 {T_COOL_SEC}秒")
             time.sleep(T_COOL_SEC)
+            self._logger.debug("冷却完成")
 
             # === Capture reference frame (Spec 6.1 step 5) ===
             # #region agent log
             _log_debug("engine.py:before_capture_t0", "About to capture frame_t0", {"idx": idx}, "A")
             # #endregion
-            frame_t0 = capture_roi_gray(roi)
+            self._logger.debug("准备捕获参考帧 frame_t0", idx=idx)
+            try:
+                frame_t0 = capture_roi_gray(roi)
+            except Exception as e:
+                self._logger.exception("捕获参考帧失败", e, idx=idx)
+                raise
             # #region agent log
             _log_debug("engine.py:after_capture_t0", "Captured frame_t0", {"idx": idx, "shape": list(frame_t0.shape)}, "A")
             # #endregion
             self._hold_hits = 0
+            self._logger.info("采集frame_t0", frame_shape=f"{frame_t0.shape}", idx=idx)
             # #region agent log
             _log_debug("engine.py:before_logger_info_frame_t0", "About to log frame_t0", {"idx": idx}, "J")
             # #endregion
-            self._logger.info("采集frame_t0")
             # #region agent log
             _log_debug("engine.py:after_logger_info_frame_t0", "Logger info done", {"idx": idx}, "J")
             # #endregion
@@ -289,6 +326,7 @@ class AutomationWorker(QObject):
             _log_debug("engine.py:before_set_state_waitinghold", "About to set state WaitingHold", {"idx": idx}, "F")
             # #endregion
             self._set_state(State.WaitingHold)
+            self._logger.debug("进入等待变化检测阶段", idx=idx, th_hold=f"{self._th_hold:.6f}")
             # #region agent log
             _log_debug("engine.py:after_set_state_waitinghold", "State WaitingHold set", {"idx": idx}, "F")
             # #endregion
@@ -296,18 +334,22 @@ class AutomationWorker(QObject):
             # #region agent log
             _log_debug("engine.py:entering_while_loop", "Entering while True loop", {"idx": idx}, "G")
             # #endregion
+            loop_count = 0
             while True:
                 # #region agent log
                 _log_debug("engine.py:while_loop_iteration", "While loop iteration start", {"idx": idx, "hold_hits": self._hold_hits}, "G")
                 # #endregion
+                loop_count += 1
+                
                 if self._stop_event.is_set():
-                    self._logger.info("用户停止")
+                    self._logger.info("用户停止", loop_iteration=loop_count)
                     return
 
                 # Handle pause
                 if self._pause_event.is_set():
                     # Save state for resume
                     self._paused_state = State.WaitingHold
+                    self._logger.debug("等待阶段检测到暂停请求", loop_iteration=loop_count)
                     if not self._handle_pause(frame_t0):
                         return  # Messages changed or stopped
 
@@ -315,19 +357,28 @@ class AutomationWorker(QObject):
                 # #region agent log
                 _log_debug("engine.py:before_capture_frame_t", "About to capture frame_t in loop", {"idx": idx}, "G")
                 # #endregion
-                frame_t = capture_roi_gray(roi)
+                try:
+                    frame_t = capture_roi_gray(roi)
+                except Exception as e:
+                    self._logger.exception("捕获当前帧失败", e, idx=idx, loop_iteration=loop_count)
+                    raise
                 # #region agent log
                 _log_debug("engine.py:after_capture_frame_t", "Captured frame_t", {"idx": idx, "shape": list(frame_t.shape)}, "G")
                 # #endregion
                 # #region agent log
                 _log_debug("engine.py:before_calculate_diff", "About to calculate diff", {"idx": idx}, "H")
                 # #endregion
-                diff = calculate_diff(frame_t, frame_t0, roi)
+                try:
+                    diff = calculate_diff(frame_t, frame_t0, roi)
+                except Exception as e:
+                    self._logger.exception("计算diff失败", e, idx=idx, loop_iteration=loop_count)
+                    raise
                 # #region agent log
                 _log_debug("engine.py:after_calculate_diff", "Diff calculated", {"idx": idx, "diff": float(diff)}, "H")
                 # #endregion
 
                 # Hold hits logic (Spec 7.2)
+                old_hold_hits = self._hold_hits
                 if diff >= self._th_hold:
                     self._hold_hits += 1
                 else:
@@ -337,6 +388,11 @@ class AutomationWorker(QObject):
                 # #region agent log
                 _log_debug("engine.py:before_sampling_emit", "About to emit sampling_update", {"idx": idx, "diff": float(diff), "hold_hits": self._hold_hits}, "I")
                 # #endregion
+                if old_hold_hits != self._hold_hits:
+                    self._logger.debug(f"Hold hits变化: {old_hold_hits} -> {self._hold_hits}", 
+                                     diff=f"{diff:.6f}", 
+                                     threshold=f"{self._th_hold:.6f}",
+                                     loop_iteration=loop_count)
                 self._logger.sampling(diff, self._hold_hits)
                 self.sampling_update.emit(diff, self._hold_hits)
                 # #region agent log
@@ -350,7 +406,9 @@ class AutomationWorker(QObject):
                 # Check if passed (Spec 6.1 step 7)
                 if self._hold_hits >= HOLD_HITS_REQUIRED:
                     self._logger.info(
-                        f"连续{HOLD_HITS_REQUIRED}次命中,进入下一条"
+                        f"连续{HOLD_HITS_REQUIRED}次命中,进入下一条",
+                        loop_iterations=loop_count,
+                        final_diff=f"{diff:.6f}"
                     )
                     break
 
@@ -358,7 +416,7 @@ class AutomationWorker(QObject):
                 time.sleep(1.0 / SAMPLE_HZ)
 
         # All messages processed
-        self._logger.info("自动化完成")
+        self._logger.info("自动化完成", total_messages=n)
 
     def _countdown(self, seconds: float) -> bool:
         """Run countdown timer.

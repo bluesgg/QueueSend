@@ -17,6 +17,15 @@ from pynput.mouse import Controller as MouseController
 from ..model import Point
 from . import IS_MACOS, IS_WINDOWS
 
+# Get logger for debug info
+def _get_input_logger():
+    """Get logger instance, lazy init to avoid circular imports."""
+    try:
+        from ..logging import get_logger
+        return get_logger()
+    except:
+        return None
+
 # Global controller instances (reused for efficiency)
 _mouse: Optional[MouseController] = None
 _keyboard: Optional[KeyboardController] = None
@@ -50,16 +59,34 @@ def click_point(point: Point, button: Button = Button.left) -> None:
         Coordinates are in virtual desktop space (may include negative values
         on multi-monitor Windows setups).
     """
+    logger = _get_input_logger()
+    if logger:
+        logger.debug(f"准备点击坐标", x=point.x, y=point.y, button=str(button))
+    
     mouse = _get_mouse()
 
     # Move to position
-    mouse.position = (point.x, point.y)
+    try:
+        mouse.position = (point.x, point.y)
+        if logger:
+            logger.debug(f"鼠标移动到位置", x=point.x, y=point.y)
+    except Exception as e:
+        if logger:
+            logger.exception("鼠标移动失败", e, x=point.x, y=point.y)
+        raise
 
     # Small delay to ensure position is set
     time.sleep(0.01)
 
     # Click
-    mouse.click(button, 1)
+    try:
+        mouse.click(button, 1)
+        if logger:
+            logger.debug(f"点击完成", x=point.x, y=point.y)
+    except Exception as e:
+        if logger:
+            logger.exception("点击失败", e, x=point.x, y=point.y)
+        raise
 
 
 def double_click_point(point: Point) -> None:
@@ -105,18 +132,30 @@ def paste_from_clipboard() -> None:
         The clipboard should be set before calling this function.
         Use set_clipboard_text() to set clipboard content.
     """
+    logger = _get_input_logger()
+    if logger:
+        logger.debug(f"准备发送粘贴快捷键", is_macos=IS_MACOS)
+    
     keyboard = _get_keyboard()
 
-    if IS_MACOS:
-        # macOS: Cmd+V
-        with keyboard.pressed(Key.cmd):
-            keyboard.press('v')
-            keyboard.release('v')
-    else:
-        # Windows/Linux: Ctrl+V
-        with keyboard.pressed(Key.ctrl):
-            keyboard.press('v')
-            keyboard.release('v')
+    try:
+        if IS_MACOS:
+            # macOS: Cmd+V
+            with keyboard.pressed(Key.cmd):
+                keyboard.press('v')
+                keyboard.release('v')
+        else:
+            # Windows/Linux: Ctrl+V
+            with keyboard.pressed(Key.ctrl):
+                keyboard.press('v')
+                keyboard.release('v')
+        
+        if logger:
+            logger.debug(f"粘贴快捷键发送完成")
+    except Exception as e:
+        if logger:
+            logger.exception("发送粘贴快捷键失败", e)
+        raise
 
     # Small delay to allow paste to complete
     time.sleep(0.05)
@@ -190,6 +229,7 @@ def set_clipboard_text(text: str) -> bool:
         to avoid COM initialization issues on Windows.
     """
     global _clipboard_result
+    logger = _get_input_logger()
 
     try:
         from PySide6.QtGui import QGuiApplication
@@ -197,18 +237,27 @@ def set_clipboard_text(text: str) -> bool:
 
         app = QGuiApplication.instance()
         if app is None:
+            if logger:
+                logger.error("无法获取QGuiApplication实例")
             return False
 
         main_thread = app.thread()
         current_thread = QThread.currentThread()
         is_main = main_thread == current_thread
 
+        if logger:
+            logger.debug(f"设置剪贴板", text_length=len(text), is_main_thread=is_main)
+
         if is_main:
             # Already on main thread, set directly
             clipboard = QGuiApplication.clipboard()
             if clipboard is None:
+                if logger:
+                    logger.error("无法获取剪贴板对象")
                 return False
             clipboard.setText(text)
+            if logger:
+                logger.debug("剪贴板设置成功 (主线程)")
             return True
         else:
             # Worker thread: use signal to marshal to main thread
@@ -218,6 +267,8 @@ def set_clipboard_text(text: str) -> bool:
 
                 helper = _get_clipboard_helper()
                 if helper is None:
+                    if logger:
+                        logger.warning("剪贴板助手未初始化，尝试直接访问")
                     # Fallback: try direct access (may cause COM error on Windows)
                     clipboard = QGuiApplication.clipboard()
                     if clipboard:
@@ -230,10 +281,22 @@ def set_clipboard_text(text: str) -> bool:
 
                 # Wait for the slot to execute on main thread
                 success = _clipboard_event.wait(timeout=2.0)
+                
+                if not success:
+                    if logger:
+                        logger.error("设置剪贴板超时")
+                elif _clipboard_result:
+                    if logger:
+                        logger.debug("剪贴板设置成功 (工作线程)")
+                else:
+                    if logger:
+                        logger.error("设置剪贴板失败")
 
                 return _clipboard_result if success else False
 
-    except Exception:
+    except Exception as e:
+        if logger:
+            logger.exception("设置剪贴板异常", e)
         return False
 
 
@@ -254,17 +317,29 @@ def paste_text(text: str) -> bool:
         doesn't have focus or doesn't support paste. The automation relies
         on ROI change detection to verify success.
     """
+    logger = _get_input_logger()
+    if logger:
+        logger.debug(f"准备粘贴文本", text_length=len(text), has_newlines='\n' in text)
+    
     # Set clipboard
     if not set_clipboard_text(text):
+        if logger:
+            logger.error("设置剪贴板失败，粘贴终止")
         return False
 
     # Small delay to ensure clipboard is ready
     time.sleep(0.02)
 
     # Send paste shortcut
-    paste_from_clipboard()
-
-    return True
+    try:
+        paste_from_clipboard()
+        if logger:
+            logger.debug("粘贴操作完成")
+        return True
+    except Exception as e:
+        if logger:
+            logger.exception("粘贴操作失败", e)
+        return False
 
 
 def type_text(text: str, interval: float = 0.02) -> None:

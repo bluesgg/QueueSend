@@ -216,6 +216,20 @@ The detection threshold (`TH_HOLD`) determines sensitivity:
 
 ## Troubleshooting
 
+### 程序崩溃或异常退出
+
+QueueSend 会自动记录详细的调试日志到项目根目录的 `debug.log` 文件中。如果程序崩溃：
+
+1. 查看 `debug.log` 文件中的最后几条记录
+2. 搜索 `[ERROR]` 级别的日志查看异常信息
+3. 参考 [DEBUG_LOG.md](DEBUG_LOG.md) 了解如何使用调试日志
+
+日志包含：
+- 完整的操作序列和时间戳
+- 鼠标点击和键盘操作
+- 截图和变化检测过程
+- 完整的异常堆栈信息
+
 ### macOS: "Screen Recording permission not granted"
 
 1. Ensure QueueSend is added to Screen Recording permissions
@@ -302,7 +316,19 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **No data collection**: All processing is local
 - **No network access**: Screenshots never leave your machine
 - **Permissions**: Required only for screen capture and input automation
-- **Logs**: May contain message content for debugging (stored locally)
+- **Logs**: Debug logs may contain message content (first 100 chars) - stored in `debug.log` locally
+- **Log Management**: Logs are auto-cleared on app restart. Delete `debug.log` if needed.
+
+## Debug Logging
+
+QueueSend automatically generates detailed debug logs during automation:
+
+- **Location**: `debug.log` in the project root directory
+- **Content**: Complete operation sequence, timestamps, mouse/keyboard actions, screenshots, diff calculations, and exception traces
+- **Privacy**: Logs may include message previews (first 100 characters)
+- **Management**: Automatically cleared when the app starts
+
+For more information on using debug logs for troubleshooting, see [DEBUG_LOG.md](DEBUG_LOG.md).
 
 ---
 

@@ -18,6 +18,15 @@ from .constants import (
 )
 from .model import ROI, CalibrationStats, Circle, ROIShape
 
+# Get logger for debug info
+def _get_diff_logger():
+    """Get logger instance, lazy init to avoid circular imports."""
+    try:
+        from .logging import get_logger
+        return get_logger()
+    except:
+        return None
+
 
 def create_circle_mask(height: int, width: int, circle: Circle) -> np.ndarray:
     """Create a boolean mask for circular ROI.
@@ -78,10 +87,13 @@ def calculate_diff(
     Raises:
         ValueError: If frames have different shapes
     """
+    logger = _get_diff_logger()
+    
     if frame_t.shape != frame_t0.shape:
-        raise ValueError(
-            f"Frame shapes must match: {frame_t.shape} vs {frame_t0.shape}"
-        )
+        error_msg = f"Frame shapes must match: {frame_t.shape} vs {frame_t0.shape}"
+        if logger:
+            logger.error(error_msg, frame_t_shape=str(frame_t.shape), frame_t0_shape=str(frame_t0.shape))
+        raise ValueError(error_msg)
 
     # Ensure grayscale (2D array)
     if frame_t.ndim == 3:
@@ -91,9 +103,14 @@ def calculate_diff(
 
     # Calculate absolute difference
     # Use int16 to avoid overflow issues with subtraction
-    absdiff = np.abs(
-        frame_t.astype(np.int16) - frame_t0.astype(np.int16)
-    ).astype(np.uint8)
+    try:
+        absdiff = np.abs(
+            frame_t.astype(np.int16) - frame_t0.astype(np.int16)
+        ).astype(np.uint8)
+    except Exception as e:
+        if logger:
+            logger.exception("计算absdiff失败", e, frame_t_dtype=str(frame_t.dtype), frame_t0_dtype=str(frame_t0.dtype))
+        raise
 
     # Apply circle mask if needed (Spec 4.2, 7.1)
     if roi is not None and roi.shape == ROIShape.CIRCLE:
@@ -102,8 +119,12 @@ def calculate_diff(
         # Only count pixels inside the circle
         masked_pixels = absdiff[mask]
         if len(masked_pixels) == 0:
+            if logger:
+                logger.warning("圆形蒙版内没有像素", height=height, width=width)
             return 0.0
         mean_diff = float(np.mean(masked_pixels))
+        if logger:
+            logger.debug(f"使用圆形蒙版", masked_pixel_count=len(masked_pixels), mean_diff=f"{mean_diff:.2f}")
     else:
         mean_diff = float(np.mean(absdiff))
 

@@ -42,6 +42,10 @@ class ApplicationController(QObject):
         self._window = window
         self._engine = AutomationEngine(self)
         self._logger = get_logger()
+        
+        # Clear debug log on startup
+        self._logger.file_logger.clear()
+        self._logger.info("应用程序控制器初始化完成")
 
         self._connect_signals()
 
@@ -84,6 +88,16 @@ class ApplicationController(QObject):
             messages: List of messages to send
             config: Calibration configuration
         """
+        # Log start of automation session
+        self._logger.info("=" * 60)
+        self._logger.info("开始新的自动化会话")
+        self._logger.info(f"消息数量: {len(messages)}")
+        self._logger.info(f"ROI: ({config.roi.rect.x}, {config.roi.rect.y}, {config.roi.rect.w}x{config.roi.rect.h})")
+        self._logger.info(f"输入点: ({config.input_point.x}, {config.input_point.y})")
+        self._logger.info(f"发送点: ({config.send_point.x}, {config.send_point.y})")
+        self._logger.info(f"阈值: {config.th_hold:.6f}")
+        self._logger.info("=" * 60)
+        
         # Validate configuration (Spec 4.4)
         validation = validate_calibration_config(config)
         if not validation.valid:
@@ -103,6 +117,7 @@ class ApplicationController(QObject):
                 "启动失败",
                 "无法启动自动化,请检查日志",
             )
+            self._logger.error("自动化引擎启动失败")
 
     @Slot()
     def _on_pause_requested(self) -> None:
