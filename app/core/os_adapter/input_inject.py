@@ -17,15 +17,6 @@ from pynput.mouse import Controller as MouseController
 from ..model import Point
 from . import IS_MACOS, IS_WINDOWS
 
-# Get logger for debug info
-def _get_input_logger():
-    """Get logger instance, lazy init to avoid circular imports."""
-    try:
-        from ..logging import get_logger
-        return get_logger()
-    except:
-        return None
-
 # Global controller instances (reused for efficiency)
 _mouse: Optional[MouseController] = None
 _keyboard: Optional[KeyboardController] = None
@@ -59,34 +50,16 @@ def click_point(point: Point, button: Button = Button.left) -> None:
         Coordinates are in virtual desktop space (may include negative values
         on multi-monitor Windows setups).
     """
-    logger = _get_input_logger()
-    if logger:
-        logger.debug(f"准备点击坐标", x=point.x, y=point.y, button=str(button))
-    
     mouse = _get_mouse()
 
     # Move to position
-    try:
-        mouse.position = (point.x, point.y)
-        if logger:
-            logger.debug(f"鼠标移动到位置", x=point.x, y=point.y)
-    except Exception as e:
-        if logger:
-            logger.exception("鼠标移动失败", e, x=point.x, y=point.y)
-        raise
+    mouse.position = (point.x, point.y)
 
     # Small delay to ensure position is set
     time.sleep(0.01)
 
     # Click
-    try:
-        mouse.click(button, 1)
-        if logger:
-            logger.debug(f"点击完成", x=point.x, y=point.y)
-    except Exception as e:
-        if logger:
-            logger.exception("点击失败", e, x=point.x, y=point.y)
-        raise
+    mouse.click(button, 1)
 
 
 def double_click_point(point: Point) -> None:
@@ -132,30 +105,18 @@ def paste_from_clipboard() -> None:
         The clipboard should be set before calling this function.
         Use set_clipboard_text() to set clipboard content.
     """
-    logger = _get_input_logger()
-    if logger:
-        logger.debug(f"准备发送粘贴快捷键", is_macos=IS_MACOS)
-    
     keyboard = _get_keyboard()
 
-    try:
-        if IS_MACOS:
-            # macOS: Cmd+V
-            with keyboard.pressed(Key.cmd):
-                keyboard.press('v')
-                keyboard.release('v')
-        else:
-            # Windows/Linux: Ctrl+V
-            with keyboard.pressed(Key.ctrl):
-                keyboard.press('v')
-                keyboard.release('v')
-        
-        if logger:
-            logger.debug(f"粘贴快捷键发送完成")
-    except Exception as e:
-        if logger:
-            logger.exception("发送粘贴快捷键失败", e)
-        raise
+    if IS_MACOS:
+        # macOS: Cmd+V
+        with keyboard.pressed(Key.cmd):
+            keyboard.press('v')
+            keyboard.release('v')
+    else:
+        # Windows/Linux: Ctrl+V
+        with keyboard.pressed(Key.ctrl):
+            keyboard.press('v')
+            keyboard.release('v')
 
     # Small delay to allow paste to complete
     time.sleep(0.05)
@@ -195,47 +156,24 @@ def init_clipboard_helper() -> None:
         
         def __init__(self):
             super().__init__()
-            logger = _get_input_logger()
-            if logger:
-                logger.debug("ClipboardHelper 初始化")
-            # CRITICAL: Use QueuedConnection for cross-thread signal
-            from PySide6.QtCore import Qt
-            self.set_text_signal.connect(self._on_set_text, Qt.ConnectionType.QueuedConnection)
-            if logger:
-                logger.debug("ClipboardHelper 信号已连接 (QueuedConnection)")
+            self.set_text_signal.connect(self._on_set_text)
         
         @Slot(str)
         def _on_set_text(self, text: str) -> None:
             global _clipboard_result
-            logger = _get_input_logger()
-            if logger:
-                logger.debug("ClipboardHelper._on_set_text 被调用", text_length=len(text))
             try:
                 clipboard = QGuiApplication.clipboard()
-                if logger:
-                    logger.debug("获取剪贴板对象", has_clipboard=clipboard is not None)
                 if clipboard is not None:
                     clipboard.setText(text)
                     _clipboard_result = True
-                    if logger:
-                        logger.debug("剪贴板文本已设置 (主线程)")
                 else:
                     _clipboard_result = False
-                    if logger:
-                        logger.error("无法获取剪贴板对象 (主线程)")
-            except Exception as e:
+            except Exception:
                 _clipboard_result = False
-                if logger:
-                    logger.exception("设置剪贴板时发生异常 (主线程)", e)
             finally:
-                if logger:
-                    logger.debug("准备设置 _clipboard_event", result=_clipboard_result)
                 _clipboard_event.set()
-                if logger:
-                    logger.debug("_clipboard_event 已设置")
     
     _clipboard_helper_instance = ClipboardHelper()
-
 
 
 def set_clipboard_text(text: str) -> bool:
@@ -252,7 +190,6 @@ def set_clipboard_text(text: str) -> bool:
         to avoid COM initialization issues on Windows.
     """
     global _clipboard_result
-    logger = _get_input_logger()
 
     try:
         from PySide6.QtGui import QGuiApplication
@@ -260,82 +197,43 @@ def set_clipboard_text(text: str) -> bool:
 
         app = QGuiApplication.instance()
         if app is None:
-            if logger:
-                logger.error("无法获取QGuiApplication实例")
             return False
 
         main_thread = app.thread()
         current_thread = QThread.currentThread()
         is_main = main_thread == current_thread
 
-        if logger:
-            logger.debug(f"设置剪贴板", text_length=len(text), is_main_thread=is_main)
-
         if is_main:
             # Already on main thread, set directly
             clipboard = QGuiApplication.clipboard()
             if clipboard is None:
-                if logger:
-                    logger.error("无法获取剪贴板对象")
                 return False
             clipboard.setText(text)
-            if logger:
-                logger.debug("剪贴板设置成功 (主线程)")
             return True
         else:
             # Worker thread: use signal to marshal to main thread
             with _clipboard_lock:
-                if logger:
-                    logger.debug("工作线程: 准备通过信号设置剪贴板")
                 _clipboard_event.clear()
                 _clipboard_result = False
 
                 helper = _get_clipboard_helper()
                 if helper is None:
-                    if logger:
-                        logger.warning("剪贴板助手未初始化，尝试直接访问")
                     # Fallback: try direct access (may cause COM error on Windows)
-                    try:
-                        clipboard = QGuiApplication.clipboard()
-                        if clipboard:
-                            clipboard.setText(text)
-                            if logger:
-                                logger.debug("直接访问剪贴板成功")
-                            return True
-                        else:
-                            if logger:
-                                logger.error("无法获取剪贴板对象")
-                            return False
-                    except Exception as e:
-                        if logger:
-                            logger.exception("直接访问剪贴板失败", e)
-                        return False
+                    clipboard = QGuiApplication.clipboard()
+                    if clipboard:
+                        clipboard.setText(text)
+                        return True
+                    return False
 
                 # Emit signal - Qt will queue it to main thread
-                if logger:
-                    logger.debug("发送信号到主线程")
                 helper.set_text_signal.emit(text)
-                if logger:
-                    logger.debug("信号已发送,等待主线程响应...")
 
                 # Wait for the slot to execute on main thread
                 success = _clipboard_event.wait(timeout=2.0)
-                
-                if not success:
-                    if logger:
-                        logger.error("设置剪贴板超时 (2秒)")
-                elif _clipboard_result:
-                    if logger:
-                        logger.debug("剪贴板设置成功 (工作线程)")
-                else:
-                    if logger:
-                        logger.error("设置剪贴板失败")
 
                 return _clipboard_result if success else False
 
-    except Exception as e:
-        if logger:
-            logger.exception("设置剪贴板异常", e)
+    except Exception:
         return False
 
 
@@ -356,41 +254,17 @@ def paste_text(text: str) -> bool:
         doesn't have focus or doesn't support paste. The automation relies
         on ROI change detection to verify success.
     """
-    logger = _get_input_logger()
-    if logger:
-        logger.debug(f"准备粘贴文本", text_length=len(text), has_newlines='\n' in text)
-    
     # Set clipboard
-    try:
-        if logger:
-            logger.debug("开始调用 set_clipboard_text")
-        result = set_clipboard_text(text)
-        if logger:
-            logger.debug(f"set_clipboard_text 返回: {result}")
-        if not result:
-            if logger:
-                logger.error("设置剪贴板失败,粘贴终止")
-            return False
-    except Exception as e:
-        if logger:
-            logger.exception("set_clipboard_text 抛出异常", e)
+    if not set_clipboard_text(text):
         return False
 
     # Small delay to ensure clipboard is ready
     time.sleep(0.02)
 
     # Send paste shortcut
-    try:
-        if logger:
-            logger.debug("开始调用 paste_from_clipboard")
-        paste_from_clipboard()
-        if logger:
-            logger.debug("粘贴操作完成")
-        return True
-    except Exception as e:
-        if logger:
-            logger.exception("粘贴操作失败", e)
-        return False
+    paste_from_clipboard()
+
+    return True
 
 
 def type_text(text: str, interval: float = 0.02) -> None:
