@@ -390,8 +390,8 @@ class AutomationWorker(QObject):
                 # #endregion
                 if old_hold_hits != self._hold_hits:
                     self._logger.debug(f"Hold hits变化: {old_hold_hits} -> {self._hold_hits}", 
-                                     diff=f"{diff:.6f}", 
-                                     threshold=f"{self._th_hold:.6f}",
+                                     diff=diff, 
+                                     threshold=self._th_hold,
                                      loop_iteration=loop_count)
                 self._logger.sampling(diff, self._hold_hits)
                 self.sampling_update.emit(diff, self._hold_hits)
@@ -400,20 +400,46 @@ class AutomationWorker(QObject):
                 # #endregion
 
                 # Explicitly clean up frame_t to help GC (memory leak prevention)
-                del frame_t
-                gc.collect()
+                # #region agent log
+                _log_debug("engine.py:before_gc_collect", "About to call gc.collect()", {"idx": idx, "loop_count": loop_count}, "G")
+                # #endregion
+                try:
+                    del frame_t
+                    gc.collect()
+                    # #region agent log
+                    _log_debug("engine.py:after_gc_collect", "gc.collect() done", {"idx": idx}, "G")
+                    # #endregion
+                except Exception as e:
+                    self._logger.exception("gc.collect() 异常", e, idx=idx, loop_iteration=loop_count)
+                    # Continue anyway
 
                 # Check if passed (Spec 6.1 step 7)
+                # #region agent log
+                _log_debug("engine.py:check_hold_hits", "Checking hold_hits", {"idx": idx, "hold_hits": self._hold_hits, "required": HOLD_HITS_REQUIRED}, "G")
+                # #endregion
                 if self._hold_hits >= HOLD_HITS_REQUIRED:
+                    # #region agent log
+                    _log_debug("engine.py:hold_hits_passed", "Hold hits requirement met, breaking loop", {"idx": idx, "hold_hits": self._hold_hits}, "G")
+                    # #endregion
                     self._logger.info(
                         f"连续{HOLD_HITS_REQUIRED}次命中,进入下一条",
                         loop_iterations=loop_count,
-                        final_diff=f"{diff:.6f}"
+                        final_diff=diff
                     )
                     break
 
                 # Wait for next sample (Spec 6.1 step 8 - infinite wait)
-                time.sleep(1.0 / SAMPLE_HZ)
+                # #region agent log
+                _log_debug("engine.py:before_sleep", "About to sleep", {"idx": idx, "sleep_time": 1.0 / SAMPLE_HZ}, "G")
+                # #endregion
+                try:
+                    time.sleep(1.0 / SAMPLE_HZ)
+                    # #region agent log
+                    _log_debug("engine.py:after_sleep", "Sleep done, loop will continue", {"idx": idx}, "G")
+                    # #endregion
+                except Exception as e:
+                    self._logger.exception("time.sleep() 异常", e, idx=idx, loop_iteration=loop_count)
+                    # Continue anyway
 
         # All messages processed
         self._logger.info("自动化完成", total_messages=n)

@@ -124,7 +124,7 @@ def calculate_diff(
             return 0.0
         mean_diff = float(np.mean(masked_pixels))
         if logger:
-            logger.debug(f"使用圆形蒙版", masked_pixel_count=len(masked_pixels), mean_diff=f"{mean_diff:.2f}")
+            logger.debug(f"使用圆形蒙版", masked_pixel_count=len(masked_pixels), mean_diff=mean_diff)
     else:
         mean_diff = float(np.mean(absdiff))
 
