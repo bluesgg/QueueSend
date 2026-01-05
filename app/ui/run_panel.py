@@ -82,6 +82,9 @@ class RunPanel(QWidget):
     calibrate_send_requested = Signal()
     threshold_calibrate_requested = Signal()
     threshold_changed = Signal(float)
+    
+    # Internal signal for thread-safe log updates
+    _log_entry_received = Signal(object)  # LogEntry
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -221,7 +224,8 @@ class RunPanel(QWidget):
 
     def _connect_signals(self) -> None:
         """Connect internal signals."""
-        pass
+        # Connect thread-safe log signal to update UI on main thread
+        self._log_entry_received.connect(self._on_log_entry_received)
 
     def _on_roi_calibrate_clicked(self) -> None:
         """Handle ROI calibrate button click."""
@@ -384,8 +388,23 @@ class RunPanel(QWidget):
     # Logging
 
     def add_log_entry(self, entry: LogEntry) -> None:
-        """Add a log entry to the log view.
+        """Add a log entry to the log view (thread-safe).
 
+        This method can be called from any thread. It emits a signal
+        that is handled on the main thread to update the UI safely.
+
+        Args:
+            entry: Log entry to add
+        """
+        # Emit signal - Qt will queue it to main thread
+        self._log_entry_received.emit(entry)
+
+    @Slot(object)
+    def _on_log_entry_received(self, entry: LogEntry) -> None:
+        """Handle log entry on main thread (slot).
+        
+        This is called on the main thread when a log entry is received.
+        
         Args:
             entry: Log entry to add
         """
@@ -400,7 +419,7 @@ class RunPanel(QWidget):
         # Display existing entries
         self._log_view.set_entries(buffer.get_all())
 
-        # Add listener for new entries
+        # Add listener for new entries (uses signal for thread safety)
         buffer.add_listener(self.add_log_entry)
 
     def clear_log(self) -> None:

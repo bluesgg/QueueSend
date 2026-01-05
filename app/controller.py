@@ -134,6 +134,11 @@ class ApplicationController(QObject):
         try:
             self._engine.calibrate_threshold(self._window._current_roi)
         except Exception as e:
+            import sys
+            import traceback
+            print(f"\n{'='*60}\nCALIBRATION ERROR 校准错误\n{'='*60}", file=sys.stderr)
+            traceback.print_exc()
+            print(f"{'='*60}\n", file=sys.stderr)
             self._window.show_error_dialog(
                 "校准失败",
                 f"阈值校准失败: {e}",

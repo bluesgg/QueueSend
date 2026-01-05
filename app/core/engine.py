@@ -22,16 +22,21 @@ from PySide6.QtCore import QObject, QThread, Signal
 from .capture import CaptureError, capture_roi_gray
 
 # #region agent log
+# DISABLED: This function was causing "access violation" crashes during garbage collection
+# The file I/O operations (open, write, fsync) are not safe during GC in a multi-threaded context
 _DEBUG_LOG_PATH = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(__file__))), ".cursor", "debug.log")
 def _log_debug(location: str, message: str, data: dict, hypothesis_id: str):
-    entry = {"location": location, "message": message, "data": data, "timestamp": int(time.time()*1000), "sessionId": "debug-session", "hypothesisId": hypothesis_id}
-    try:
-        _os.makedirs(_os.path.dirname(_DEBUG_LOG_PATH), exist_ok=True)
-        with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-            f.flush()
-            _os.fsync(f.fileno())
-    except: pass
+    # DISABLED - was causing crashes
+    # To re-enable debugging, uncomment the code below, but be aware of GC issues
+    pass
+    # entry = {"location": location, "message": message, "data": data, "timestamp": int(time.time()*1000), "sessionId": "debug-session", "hypothesisId": hypothesis_id}
+    # try:
+    #     _os.makedirs(_os.path.dirname(_DEBUG_LOG_PATH), exist_ok=True)
+    #     with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+    #         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    #         f.flush()
+    #         _os.fsync(f.fileno())
+    # except: pass
 # #endregion
 from .constants import (
     HOLD_HITS_REQUIRED,
@@ -160,12 +165,18 @@ class AutomationWorker(QObject):
             # #region agent log
             _log_debug("engine.py:run:capture_error", "CaptureError caught", {"error": str(e)}, "D")
             # #endregion
+            print(f"\n{'='*60}\nCAPTURE ERROR 错误\n{'='*60}", file=__import__('sys').stderr)
+            traceback.print_exc()
+            print(f"{'='*60}\n", file=__import__('sys').stderr)
             self._logger.error(f"截图失败: {e}")
             self.capture_failed.emit()
         except Exception as e:
             # #region agent log
             _log_debug("engine.py:run:exception", "Exception caught", {"error": str(e), "type": type(e).__name__, "traceback": traceback.format_exc()}, "D")
             # #endregion
+            print(f"\n{'='*60}\nAUTOMATION ENGINE ERROR 自动化引擎错误\n{'='*60}", file=__import__('sys').stderr)
+            traceback.print_exc()
+            print(f"{'='*60}\n", file=__import__('sys').stderr)
             self._logger.error(f"自动化错误: {e}")
             self.error_occurred.emit(str(e))
         finally:

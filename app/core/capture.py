@@ -195,17 +195,19 @@ def to_grayscale(image: np.ndarray) -> np.ndarray:
     return gray
 
 
-# Module-level reusable mss instance to avoid repeated creation/destruction
-_mss_instance: Optional[mss.mss] = None
-_mss_lock = __import__('threading').Lock()
+# Thread-local mss instances to avoid conflicts between threads
+import threading
+_mss_thread_local = threading.local()
 
 def _get_mss() -> mss.mss:
-    """Get or create a reusable mss instance."""
-    global _mss_instance
-    with _mss_lock:
-        if _mss_instance is None:
-            _mss_instance = mss.mss()
-        return _mss_instance
+    """Get or create a thread-local mss instance.
+    
+    Each thread needs its own mss instance because mss uses thread-local
+    storage internally for device contexts (srcdc, memdc, etc.).
+    """
+    if not hasattr(_mss_thread_local, 'instance'):
+        _mss_thread_local.instance = mss.mss()
+    return _mss_thread_local.instance
 
 def capture_roi_gray(
     roi: ROI,
@@ -215,8 +217,8 @@ def capture_roi_gray(
     """Capture and crop ROI, returning grayscale image.
 
     Optimized to capture only the ROI region directly instead of
-    capturing the full desktop and cropping. Uses a reusable mss instance
-    to avoid memory leaks from repeated instance creation.
+    capturing the full desktop and cropping. Uses thread-local mss instances
+    to avoid memory leaks and thread conflicts.
 
     Args:
         roi: Region of interest to capture
@@ -238,6 +240,7 @@ def capture_roi_gray(
 
     for attempt in range(retry_count):
         try:
+            # Get thread-local mss instance
             sct = _get_mss()
             # Capture only the ROI region directly (huge memory savings!)
             monitor = {

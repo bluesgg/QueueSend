@@ -250,3 +250,40 @@ def set_logger(logger: Logger) -> None:
     global _global_logger
     _global_logger = logger
 
+
+class ConsoleLogListener:
+    """Log listener that prints entries to console/terminal."""
+    
+    def __init__(self, min_level: LogLevel = LogLevel.DEBUG) -> None:
+        """Initialize console listener.
+        
+        Args:
+            min_level: Minimum log level to print
+        """
+        self.min_level = min_level
+    
+    def __call__(self, entry: LogEntry) -> None:
+        """Print log entry to console if level is sufficient."""
+        import sys
+        
+        # Check if entry level is sufficient
+        if entry.level.value >= self.min_level.value:
+            # Use different colors for different levels
+            if entry.level == LogLevel.ERROR:
+                print(f"[ERROR] {entry.format()}", file=sys.stderr)
+            elif entry.level == LogLevel.WARNING:
+                print(f"[WARN] {entry.format()}", file=sys.stderr)
+            else:
+                print(f"[{entry.level.name}] {entry.format()}", file=sys.stdout)
+
+
+def enable_console_logging(min_level: LogLevel = LogLevel.INFO) -> None:
+    """Enable logging to console/terminal.
+    
+    Args:
+        min_level: Minimum log level to print (default: INFO)
+    """
+    logger = get_logger()
+    listener = ConsoleLogListener(min_level)
+    logger.buffer.add_listener(listener)
+

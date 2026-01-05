@@ -50,16 +50,33 @@ def click_point(point: Point, button: Button = Button.left) -> None:
         Coordinates are in virtual desktop space (may include negative values
         on multi-monitor Windows setups).
     """
-    mouse = _get_mouse()
+    import sys
+    import traceback
+    
+    try:
+        print(f"[DEBUG] click_point: ({point.x}, {point.y})", file=sys.stderr)
+        mouse = _get_mouse()
+        print(f"[DEBUG] mouse controller obtained", file=sys.stderr)
 
-    # Move to position
-    mouse.position = (point.x, point.y)
+        # Move to position
+        print(f"[DEBUG] setting mouse position to ({point.x}, {point.y})", file=sys.stderr)
+        mouse.position = (point.x, point.y)
+        print(f"[DEBUG] mouse position set", file=sys.stderr)
 
-    # Small delay to ensure position is set
-    time.sleep(0.01)
+        # Small delay to ensure position is set
+        time.sleep(0.01)
 
-    # Click
-    mouse.click(button, 1)
+        # Click
+        print(f"[DEBUG] performing click", file=sys.stderr)
+        mouse.click(button, 1)
+        print(f"[DEBUG] click completed", file=sys.stderr)
+    except Exception as e:
+        print(f"\n{'='*60}\nCLICK_POINT ERROR 点击错误\n{'='*60}", file=sys.stderr)
+        print(f"Point: ({point.x}, {point.y})", file=sys.stderr)
+        print(f"Button: {button}", file=sys.stderr)
+        traceback.print_exc()
+        print(f"{'='*60}\n", file=sys.stderr)
+        raise
 
 
 def double_click_point(point: Point) -> None:
@@ -160,18 +177,31 @@ def init_clipboard_helper() -> None:
         
         @Slot(str)
         def _on_set_text(self, text: str) -> None:
+            import sys
             global _clipboard_result
             try:
+                print(f"[DEBUG] _on_set_text SLOT called, text length={len(text)}", file=sys.stderr)
+                print(f"[DEBUG] getting clipboard from QGuiApplication", file=sys.stderr)
                 clipboard = QGuiApplication.clipboard()
+                print(f"[DEBUG] clipboard object: {clipboard}", file=sys.stderr)
                 if clipboard is not None:
+                    print(f"[DEBUG] SLOT: calling clipboard.setText()", file=sys.stderr)
+                    sys.stderr.flush()  # Force flush before potential crash
                     clipboard.setText(text)
+                    print(f"[DEBUG] SLOT: clipboard.setText() completed", file=sys.stderr)
                     _clipboard_result = True
                 else:
+                    print(f"[DEBUG] SLOT: clipboard is None!", file=sys.stderr)
                     _clipboard_result = False
-            except Exception:
+            except Exception as e:
+                print(f"[DEBUG] SLOT: Exception: {e}", file=sys.stderr)
+                import traceback
+                traceback.print_exc()
                 _clipboard_result = False
             finally:
+                print(f"[DEBUG] SLOT: setting event", file=sys.stderr)
                 _clipboard_event.set()
+                print(f"[DEBUG] SLOT: event set, exiting", file=sys.stderr)
     
     _clipboard_helper_instance = ClipboardHelper()
 
@@ -189,51 +219,73 @@ def set_clipboard_text(text: str) -> bool:
         This function safely marshals clipboard calls to the main thread
         to avoid COM initialization issues on Windows.
     """
+    import sys
     global _clipboard_result
 
     try:
+        print(f"[DEBUG] set_clipboard_text START", file=sys.stderr)
         from PySide6.QtGui import QGuiApplication
         from PySide6.QtCore import QThread
 
+        print(f"[DEBUG] getting QGuiApplication instance", file=sys.stderr)
         app = QGuiApplication.instance()
         if app is None:
+            print(f"[DEBUG] QGuiApplication instance is None!", file=sys.stderr)
             return False
 
+        print(f"[DEBUG] checking thread", file=sys.stderr)
         main_thread = app.thread()
         current_thread = QThread.currentThread()
         is_main = main_thread == current_thread
+        print(f"[DEBUG] is_main_thread={is_main}, current={current_thread.objectName()}", file=sys.stderr)
 
         if is_main:
+            print(f"[DEBUG] on main thread, direct clipboard access", file=sys.stderr)
             # Already on main thread, set directly
             clipboard = QGuiApplication.clipboard()
             if clipboard is None:
+                print(f"[DEBUG] clipboard is None!", file=sys.stderr)
                 return False
+            print(f"[DEBUG] calling clipboard.setText()", file=sys.stderr)
             clipboard.setText(text)
+            print(f"[DEBUG] clipboard.setText() completed", file=sys.stderr)
             return True
         else:
+            print(f"[DEBUG] on worker thread, marshaling to main thread", file=sys.stderr)
             # Worker thread: use signal to marshal to main thread
             with _clipboard_lock:
+                print(f"[DEBUG] acquired clipboard lock", file=sys.stderr)
                 _clipboard_event.clear()
                 _clipboard_result = False
 
                 helper = _get_clipboard_helper()
+                print(f"[DEBUG] clipboard helper: {helper}", file=sys.stderr)
                 if helper is None:
+                    print(f"[DEBUG] helper is None, using fallback", file=sys.stderr)
                     # Fallback: try direct access (may cause COM error on Windows)
                     clipboard = QGuiApplication.clipboard()
                     if clipboard:
+                        print(f"[DEBUG] FALLBACK: calling clipboard.setText()", file=sys.stderr)
                         clipboard.setText(text)
+                        print(f"[DEBUG] FALLBACK: clipboard.setText() completed", file=sys.stderr)
                         return True
                     return False
 
                 # Emit signal - Qt will queue it to main thread
+                print(f"[DEBUG] emitting set_text_signal", file=sys.stderr)
                 helper.set_text_signal.emit(text)
+                print(f"[DEBUG] signal emitted, waiting for result", file=sys.stderr)
 
                 # Wait for the slot to execute on main thread
                 success = _clipboard_event.wait(timeout=2.0)
+                print(f"[DEBUG] wait completed, success={success}, result={_clipboard_result}", file=sys.stderr)
 
                 return _clipboard_result if success else False
 
-    except Exception:
+    except Exception as e:
+        print(f"[DEBUG] Exception in set_clipboard_text: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -254,17 +306,35 @@ def paste_text(text: str) -> bool:
         doesn't have focus or doesn't support paste. The automation relies
         on ROI change detection to verify success.
     """
-    # Set clipboard
-    if not set_clipboard_text(text):
-        return False
+    import sys
+    import traceback
+    
+    try:
+        print(f"[DEBUG] paste_text: length={len(text)}, text={text[:50]}...", file=sys.stderr)
+        
+        # Set clipboard
+        print(f"[DEBUG] setting clipboard", file=sys.stderr)
+        if not set_clipboard_text(text):
+            print(f"[DEBUG] clipboard set FAILED", file=sys.stderr)
+            return False
+        print(f"[DEBUG] clipboard set OK", file=sys.stderr)
 
-    # Small delay to ensure clipboard is ready
-    time.sleep(0.02)
+        # Small delay to ensure clipboard is ready
+        time.sleep(0.02)
 
-    # Send paste shortcut
-    paste_from_clipboard()
+        # Send paste shortcut
+        print(f"[DEBUG] sending paste command", file=sys.stderr)
+        paste_from_clipboard()
+        print(f"[DEBUG] paste command sent", file=sys.stderr)
 
-    return True
+        return True
+    except Exception as e:
+        print(f"\n{'='*60}\nPASTE_TEXT ERROR 粘贴错误\n{'='*60}", file=sys.stderr)
+        print(f"Text length: {len(text)}", file=sys.stderr)
+        print(f"Text preview: {text[:100]}", file=sys.stderr)
+        traceback.print_exc()
+        print(f"{'='*60}\n", file=sys.stderr)
+        raise
 
 
 def type_text(text: str, interval: float = 0.02) -> None:
