@@ -111,8 +111,12 @@ def main() -> int:
         app.setOrganizationName("QueueSend")
 
         # Initialize clipboard helper on main thread (required for worker thread clipboard access)
-        from app.core.os_adapter.input_inject import init_clipboard_helper
+        from app.core.os_adapter.input_inject import init_clipboard_helper, init_input_controllers
         init_clipboard_helper()
+        
+        # Initialize pynput controllers on main thread (macOS requires this to avoid crashes)
+        # pynput accesses HIServices APIs during controller initialization which must run on main thread
+        init_input_controllers()
 
         # Check macOS requirements
         macos_ready, macos_error = check_macos_requirements()

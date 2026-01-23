@@ -206,6 +206,28 @@ def init_clipboard_helper() -> None:
     _clipboard_helper_instance = ClipboardHelper()
 
 
+def init_input_controllers() -> None:
+    """Initialize pynput input controllers on the main thread.
+    
+    MUST be called from the main thread before any worker thread uses input injection.
+    On macOS, pynput's controllers access HIServices APIs during initialization,
+    which must run on the main thread to avoid dispatch_assert_queue crashes.
+    
+    Typically called during application startup.
+    """
+    import sys
+    try:
+        print(f"[INIT] Initializing input controllers on main thread...", file=sys.stderr)
+        # Force initialization of both controllers on main thread
+        _ = _get_mouse()
+        _ = _get_keyboard()
+        print(f"[INIT] Input controllers initialized successfully", file=sys.stderr)
+    except Exception as e:
+        print(f"[INIT] Warning: Failed to initialize input controllers: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+
+
 def set_clipboard_text(text: str) -> bool:
     """Set text to the system clipboard using Qt.
 
